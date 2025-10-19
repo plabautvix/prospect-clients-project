@@ -1,0 +1,25 @@
+[project]
+requires-python = ">=3.9"
+
+
+
+[tool.poetry]
+name = "prospect-clients"
+version = "0.1.0"
+description = ""
+authors = ["Pedro Lucas Andrade Braganca <pedroluxa871632@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = {extras = ["standard"], version = "^0.119.0"}
+selenium = "^4.37.0"
+uvicorn = "^0.38.0"
+httpx = "^0.28.1"
+ruff = "^0.14.1"
+pydantic = "^2.12.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
