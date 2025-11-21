@@ -1,8 +1,3 @@
-[project]
-requires-python = ">=3.9"
-
-
-
 [tool.poetry]
 name = "prospect-clients"
 version = "0.1.0"
@@ -18,6 +13,9 @@ uvicorn = "^0.38.0"
 httpx = "^0.28.1"
 ruff = "^0.14.1"
 pydantic = "^2.12.3"
+pyjwt = "^2.10.1"
+sqlalchemy = "^2.0.44"
+bcrypt = "^5.0.0"
 
 
 [build-system]

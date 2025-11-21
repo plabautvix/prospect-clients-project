@@ -8,14 +8,14 @@ businesses and returns them as a list of dictionaries.
 import time
 import os
 from http import HTTPStatus
-from fastapi import FastAPI
+from fastapi import APIRouter
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from prospect_clients.src.models.schemas.data_returned_selenium import (LeadsResponse)
 
-app = FastAPI()
+router = APIRouter()
 
 options = Options()
 
@@ -25,13 +25,13 @@ if os.path.exists(snap_firefox_real):
     options.binary_location = snap_firefox_real
 
 
-@app.get(
+@router.get(
 "/leads", 
 response_model=LeadsResponse,
 status_code=HTTPStatus.OK,
 response_description="A list of leads with their contact information."
 )
-def read_route():
+def read_route(text_serach: str):
     """
     This function uses Selenium to scrape contact information from Google Maps
     for businesses in a specified location. It collects phone numbers, names,
@@ -48,7 +48,7 @@ def read_route():
     text_input_search.clear()
 
     time.sleep(2)
-    text_input_search.send_keys("Empresas no Espirito Santo, Em são Pedro Vitória")
+    text_input_search.send_keys(text_serach)
     text_input_search.send_keys(Keys.RETURN)
     time.sleep(5)
 
