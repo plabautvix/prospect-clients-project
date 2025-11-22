@@ -1,0 +1,24 @@
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+
+export interface LeadPayload {
+  nome: string | null | undefined;
+  endereco: string | null | undefined;
+  telefone: string | null | undefined;
+  site: string | null | undefined;
+}
+
+@Injectable({ providedIn: 'root' })
+export class WhatsappApiService {
+  private http = inject(HttpClient);
+  private baseUrl = 'http://localhost:3000';
+
+  sendCustomMessage(lead: LeadPayload, message: string) {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/api/send`, {
+      lead,
+      message
+    });
+  }
+}
+
+

@@ -105,6 +105,41 @@ app.get('/api/whatsapp/me', async (_req, res) => {
         return res.status(500).json({ ok: false, error: 'internal_error', detail: String((err && err.message) || err) });
     }
 });
+
+// Envia mensagem personalizada para um único contato
+// Body: { lead: { nome, endereco, telefone, site }, message: string }
+app.post('/api/send', async (req, res) => {
+    try {
+        if (!isReady) {
+            return res.status(503).json({ ok: false, error: 'client_not_ready' });
+        }
+        const lead = req.body?.lead || {};
+        const messageRaw = (req.body?.message || '').trim();
+        const telefone = lead?.telefone;
+        if (!telefone) {
+            return res.status(400).json({ ok: false, error: 'missing_telefone' });
+        }
+        if (!messageRaw) {
+            return res.status(400).json({ ok: false, error: 'missing_message' });
+        }
+        const jid = phoneToJid(telefone);
+        const lines = [
+            messageRaw,
+            '',
+            '— Dados da empresa —',
+            lead?.nome ? `Nome: ${lead.nome}` : null,
+            lead?.endereco ? `Endereço: ${lead.endereco}` : null,
+            lead?.site ? `Site: ${lead.site}` : null,
+            `Telefone: ${telefone}`,
+        ].filter(Boolean);
+        const finalMessage = lines.join('\n');
+        await client.sendMessage(jid, finalMessage);
+        return res.json({ ok: true, to: jid });
+    } catch (err) {
+        console.error('Erro em /api/send:', err);
+        return res.status(500).json({ ok: false, error: 'internal_error', detail: String((err && err.message) || err) });
+    }
+});
 // Estado de leads contatados via /api/landing
 // Map<JID, { stage: 'sent_offer' | 'asked_optin' | 'opted_in', prospect: any, ts: number }>
 const outreachState = new Map();
