@@ -37,6 +37,46 @@
 
   <mat-divider></mat-divider>
 
+  <section class="sent-stats">
+    <header class="sent-header">
+      <h2>Mensagens enviadas</h2>
+      <button mat-stroked-button color="primary" (click)="refreshSent()">
+        <mat-icon fontIcon="refresh"></mat-icon>
+        Atualizar
+      </button>
+    </header>
+    <div class="sent-summary" *ngIf="sentSummary">
+      <span>Total: <strong>{{ sentSummary.total }}</strong></span>
+      <span>Enviadas: <strong>{{ sentSummary.sent }}</strong></span>
+      <span>Falhas: <strong>{{ sentSummary.failed }}</strong></span>
+    </div>
+    <div class="sent-list">
+      <table class="sent-table" *ngIf="sentItems?.length; else noItemsTpl">
+        <thead>
+          <tr>
+            <th>Quando</th>
+            <th>Empresa</th>
+            <th>Telefone</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of sentItems">
+            <td>{{ item.ts | date:'short' }}</td>
+            <td>{{ item.lead?.nome || '—' }}</td>
+            <td>{{ item.lead?.telefone || '—' }}</td>
+            <td>{{ item.ok ? 'OK' : 'Falha' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <ng-template #noItemsTpl>
+        <p>Nenhuma mensagem enviada ainda.</p>
+      </ng-template>
+    </div>
+  </section>
+
+  <mat-divider></mat-divider>
+
   <section class="operations-list">
     @for (operation of operations; track operation.id) {
       <article class="operation-card" [class.operation-paused]="operation.status === 'Pausada'">

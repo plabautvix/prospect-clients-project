@@ -1,9 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { HttpClient } from '@angular/common/http';
+import { NgFor, NgIf, DatePipe } from '@angular/common';
 
 interface ProspectingOperation {
   id: number;
@@ -19,11 +21,33 @@ interface ProspectingOperation {
 @Component({
   selector: 'app-operations-dashboard',
   standalone: true,
-  imports: [MatCardModule, MatButtonModule, MatIconModule, MatDividerModule, MatTooltipModule],
+  imports: [MatCardModule, MatButtonModule, MatIconModule, MatDividerModule, MatTooltipModule, NgFor, NgIf, DatePipe],
   templateUrl: './operations-dashboard.html',
   styleUrl: './operations-dashboard.scss'
 })
 export class OperationsDashboard {
+  private http = inject(HttpClient);
+  public sentSummary: { total: number; sent: number; failed: number } | null = null;
+  public sentItems: Array<{ ts: number; to: string; lead: any; ok: boolean }> = [];
+
+  constructor() {
+    this.refreshSent();
+  }
+
+  refreshSent(): void {
+    this.http.get<{ ok: boolean; total: number; sent: number; failed: number }>('http://localhost:3000/api/sent/summary')
+      .subscribe(resp => {
+        if (resp?.ok) {
+          this.sentSummary = { total: resp.total, sent: resp.sent, failed: resp.failed };
+        }
+      });
+    this.http.get<{ ok: boolean; total: number; items: any[] }>('http://localhost:3000/api/sent/log', { params: { limit: 50 } as any })
+      .subscribe(resp => {
+        if (resp?.ok) {
+          this.sentItems = resp.items || [];
+        }
+      });
+  }
   public readonly heroMetrics = [
     {
       icon: 'rocket_launch',

@@ -25,6 +25,9 @@ let isAuthenticated = false;
 let lastQr = null;
 let lastAuthFailure = null;
 let lastDisconnectReason = null;
+// Log simples de mensagens enviadas
+// Array<{ ts:number, to:string, lead:{nome,endereco,telefone,site}, ok:boolean }>
+const sentLog = [];
 
 // --- Server-Sent Events (SSE) para QR e status de autenticação ---
 /** @type {Set<import('http').ServerResponse>} */
@@ -134,11 +137,85 @@ app.post('/api/send', async (req, res) => {
         ].filter(Boolean);
         const finalMessage = lines.join('\n');
         await client.sendMessage(jid, finalMessage);
+        sentLog.push({ ts: Date.now(), to: jid, lead, ok: true });
         return res.json({ ok: true, to: jid });
     } catch (err) {
         console.error('Erro em /api/send:', err);
+        sentLog.push({ ts: Date.now(), to: 'unknown', lead: req.body?.lead || null, ok: false });
         return res.status(500).json({ ok: false, error: 'internal_error', detail: String((err && err.message) || err) });
     }
+});
+
+// Envio em lote: Body { leads: Lead[], message: string }
+app.post('/api/send-batch', async (req, res) => {
+    try {
+        if (!isReady) {
+            return res.status(503).json({ ok: false, error: 'client_not_ready' });
+        }
+        const leads = Array.isArray(req.body?.leads) ? req.body.leads : [];
+        const messageRaw = (req.body?.message || '').trim();
+        if (!messageRaw) {
+            return res.status(400).json({ ok: false, error: 'missing_message' });
+        }
+        if (leads.length === 0) {
+            return res.status(400).json({ ok: false, error: 'empty_leads' });
+        }
+
+        const results = [];
+        for (const lead of leads) {
+            const telefone = lead?.telefone;
+            if (!telefone) {
+                results.push({ ok: false, error: 'missing_telefone', lead });
+                continue;
+            }
+            const jid = phoneToJid(telefone);
+            const lines = [
+                messageRaw,
+                '',
+                '— Dados da empresa —',
+                lead?.nome ? `Nome: ${lead.nome}` : null,
+                lead?.endereco ? `Endereço: ${lead.endereco}` : null,
+                lead?.site ? `Site: ${lead.site}` : null,
+                `Telefone: ${telefone}`,
+            ].filter(Boolean);
+            const finalMessage = lines.join('\n');
+            try {
+                await client.sendMessage(jid, finalMessage);
+                results.push({ ok: true, to: jid, lead });
+                sentLog.push({ ts: Date.now(), to: jid, lead, ok: true });
+                await new Promise(r => setTimeout(r, 250));
+            } catch (err) {
+                results.push({ ok: false, to: jid, error: String(err && err.message || err), lead });
+                sentLog.push({ ts: Date.now(), to: jid, lead, ok: false });
+            }
+        }
+
+        const summary = {
+            ok: true,
+            total: results.length,
+            sent: results.filter(r => r.ok).length,
+            failed: results.filter(r => !r.ok).length,
+            results
+        };
+        return res.json(summary);
+    } catch (err) {
+        console.error('Erro em /api/send-batch:', err);
+        return res.status(500).json({ ok: false, error: 'internal_error', detail: String((err && err.message) || err) });
+    }
+});
+
+// Estatísticas simples
+app.get('/api/sent/summary', (_req, res) => {
+    const total = sentLog.length;
+    const sent = sentLog.filter(i => i.ok).length;
+    const failed = total - sent;
+    res.json({ ok: true, total, sent, failed });
+});
+
+app.get('/api/sent/log', (req, res) => {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 100));
+    const items = sentLog.slice(-limit).reverse();
+    res.json({ ok: true, items, total: sentLog.length });
 });
 // Estado de leads contatados via /api/landing
 // Map<JID, { stage: 'sent_offer' | 'asked_optin' | 'opted_in', prospect: any, ts: number }>

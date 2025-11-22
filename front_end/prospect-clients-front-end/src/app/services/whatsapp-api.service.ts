@@ -19,6 +19,26 @@ export class WhatsappApiService {
       message
     });
   }
+
+  sendBatchMessage(leads: LeadPayload[], message: string) {
+    return this.http.post<{ ok: boolean; total: number; sent: number; failed: number }>(
+      `${this.baseUrl}/api/send-batch`,
+      { leads, message }
+    );
+  }
+
+  getSentSummary() {
+    return this.http.get<{ ok: boolean; total: number; sent: number; failed: number }>(
+      `${this.baseUrl}/api/sent/summary`
+    );
+  }
+
+  getSentLog(limit = 100) {
+    return this.http.get<{ ok: boolean; total: number; items: any[] }>(
+      `${this.baseUrl}/api/sent/log`,
+      { params: { limit } as any }
+    );
+  }
 }
 
 

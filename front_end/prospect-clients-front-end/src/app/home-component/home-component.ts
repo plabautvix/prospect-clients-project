@@ -1,4 +1,4 @@
-import { Component , inject} from '@angular/core';
+import { Component , inject, signal } from '@angular/core';
 import { Userservice } from '../services/userservice/userservice';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
@@ -7,6 +7,9 @@ import {MatIconModule} from '@angular/material/icon';
 import { CardLead } from '../card-lead/card-lead/card-lead';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
+import { WhatsappApiService } from '../services/whatsapp-api.service';
+import { BatchMessageDialog } from './batch-message-dialog/batch-message-dialog';
 interface Lead {
   nome: string;
   endereco: string;
@@ -23,8 +26,12 @@ interface Lead {
 })
 export class HomeComponent {
   public userService: Userservice = inject(Userservice);
+  private dialog = inject(MatDialog);
+  private whatsappApi = inject(WhatsappApiService);
   public searchText: FormControl<string | null> = new FormControl('');
   public leadsList: Lead[] = [];
+  private selectedMap = new Map<string, Lead>();
+  public readonly selectedLeadsCount = signal<number>(0);
   public getLeads($event: Event): void {
     $event.preventDefault();
     this.userService.getUserInfo(this.searchText.value ?? '').subscribe(
@@ -35,4 +42,41 @@ export class HomeComponent {
       );
   }
 
+  onCardSelectedChange(e: any) {
+    const lead: Lead = {
+      nome: e?.lead?.nome ?? '',
+      endereco: e?.lead?.endereco ?? '',
+      telefone: e?.lead?.telefone ?? '',
+      site: e?.lead?.site ?? null,
+      foto: e?.lead?.foto ?? null
+    };
+    const key = (e?.telefone as string) || JSON.stringify(lead);
+    if (e?.selected) this.selectedMap.set(key, lead);
+    else this.selectedMap.delete(key);
+    this.selectedLeadsCount.set(this.selectedMap.size);
+  }
+
+  openBatchDialog(): void {
+    const ref = this.dialog.open(BatchMessageDialog);
+    ref.afterClosed().subscribe((message?: string) => {
+      if (!message) return;
+      const leads = Array.from(this.selectedMap.values());
+      this.whatsappApi.sendBatchMessage(
+        leads.map(l => ({
+          nome: l.nome,
+          endereco: l.endereco,
+          telefone: l.telefone,
+          site: l.site
+        })),
+        message
+      ).subscribe({
+        next: (resp) => {
+          alert(`Lote enviado: ${resp.sent}/${resp.total} com sucesso, ${resp.failed} falharam.`);
+        },
+        error: () => {
+          alert('Falha no envio em lote. Verifique o WhatsApp services.');
+        }
+      });
+    });
+  }
 }

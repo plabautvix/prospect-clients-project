@@ -1,14 +1,15 @@
-import { Component, input, InputSignal, inject } from '@angular/core';
+import { Component, input, InputSignal, inject, EventEmitter, Output, signal } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { SendMessageDialog } from '../send-message-dialog/send-message-dialog';
 import { WhatsappApiService } from '../../services/whatsapp-api.service';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 @Component({
   selector: 'app-card-lead',
-  imports: [MatCardModule, MatIconModule, MatButtonModule],
+  imports: [MatCardModule, MatIconModule, MatButtonModule, MatCheckboxModule],
   standalone: true,
   templateUrl: './card-lead.html',
   styleUrl: './card-lead.scss'
@@ -23,6 +24,24 @@ export class CardLead {
 
   private dialog = inject(MatDialog);
   private whatsappApi = inject(WhatsappApiService);
+
+  public readonly isSelected = signal<boolean>(false);
+  @Output() selectedChange = new EventEmitter<{ selected: boolean; telefone: string; lead: { nome: string; endereco: string; telefone: string; site: string | null; foto: string | null } }>();
+
+  toggleSelected(next: boolean): void {
+    this.isSelected.set(next);
+    this.selectedChange.emit({
+      selected: next,
+      telefone: this.telefone() || '',
+      lead: {
+        nome: this.nome() || '',
+        endereco: this.endereco() || '',
+        telefone: this.telefone() || '',
+        site: this.site() || null,
+        foto: this.foto() || null
+      }
+    });
+  }
 
   openSendDialog(): void {
     const ref = this.dialog.open(SendMessageDialog, {

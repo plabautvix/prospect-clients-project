@@ -36,6 +36,9 @@
   </mat-card-content>
 
   <div class="card-actions">
+    <mat-checkbox [checked]="isSelected()" (change)="toggleSelected($event.checked)">
+      Selecionar para envio em lote
+    </mat-checkbox>
     <button mat-stroked-button color="primary" (click)="openSendDialog()">
       Enviar mensagem automatizada
     </button>
