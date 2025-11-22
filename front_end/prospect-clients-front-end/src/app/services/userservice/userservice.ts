@@ -1,9 +1,18 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {Router} from '@angular/router';
+import { map } from 'rxjs';
 interface UserData {
   email: string | null;
   password: string | null;
+}
+
+interface Lead {
+  nome: string;
+  endereco: string;
+  telefone: string;
+  site: string | null;
+  foto: string | null;
 }
 
 @Injectable({
@@ -51,5 +60,13 @@ export class Userservice {
         }
 
       })
+    }
+    public getUserInfo (serachText: string) {
+      return this.httpClient.get<{leads: Lead[]}>('http://localhost:8000/automations/leads', {params: {text_serach : serachText}})
+      .pipe(
+        map(response => {
+          return response.leads;
+        })
+      )
     }
   }

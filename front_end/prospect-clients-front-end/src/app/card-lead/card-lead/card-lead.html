@@ -1,0 +1,37 @@
+<mat-card appearance="outlined" class="card-lead">
+  @if (foto()) {
+    <div class="card-media">
+      <img mat-card-image [src]="foto()" alt="Foto da sede da empresa" class="photo" />
+    </div>
+  } @else {
+    <div class="card-media placeholder">
+      <mat-icon fontIcon="business"></mat-icon>
+    </div>
+  }
+
+  <mat-card-header>
+    <mat-card-title>{{ nome() || 'Lead sem nome' }}</mat-card-title>
+    <mat-card-subtitle>{{ endereco() || 'Endereço não informado' }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <ul class="info-list">
+      <li class="info-item">
+        <mat-icon fontIcon="call"></mat-icon>
+        <span>{{ telefone() || 'Telefone não informado' }}</span>
+      </li>
+      <li class="info-item">
+        <mat-icon fontIcon="place"></mat-icon>
+        <span>{{ endereco() || 'Endereço não informado' }}</span>
+      </li>
+      <li class="info-item">
+        <mat-icon fontIcon="language"></mat-icon>
+        @if (site()) {
+          <a [href]="site()" target="_blank" rel="noopener">{{ site() }}</a>
+        } @else {
+          <span>Website não informado</span>
+        }
+      </li>
+    </ul>
+  </mat-card-content>
+</mat-card>

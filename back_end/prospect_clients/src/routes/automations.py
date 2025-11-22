@@ -53,7 +53,7 @@ def read_route(text_serach: str):
     time.sleep(5)
 
     results_catched = []
-    quantity_required = 20
+    quantity_required = 3
     entities_with_contacts: list[dict] = []
 
     while len(entities_with_contacts) < quantity_required:
@@ -63,7 +63,7 @@ def read_route(text_serach: str):
                 for element in driver.find_elements(By.TAG_NAME, "A")
                 if element not in results_catched
             ]
-            process_leads(driver, results, entities_with_contacts)
+            process_leads(driver, results, entities_with_contacts, results_catched)
         except Exception as e:
             print(f"Error occurred: {e}")
         container = driver.find_element(
@@ -71,7 +71,6 @@ def read_route(text_serach: str):
         )
         driver.execute_script("arguments[0].scrollBy(0, 300)", container)
         time.sleep(5)
-        results_catched.extend(results)
 
     return {"leads": entities_with_contacts}
 
@@ -102,7 +101,7 @@ def safe_find_element_by_css_selector(
         return None
 
 
-def process_leads(driver, results: list, entities_with_contacts: list):
+def process_leads(driver, results: list, entities_with_contacts: list, results_catched: list):
     """
     This function processes a list of lead elements, extracting contact
     information for each lead and appending it to the entities_with_contacts list.
@@ -119,11 +118,18 @@ def process_leads(driver, results: list, entities_with_contacts: list):
         if len(lead.get_attribute("class").split(" ")) == 1:
             lead.click()
             time.sleep(0.5)
+            photo_url = None
             try:
                 information_for_lead = driver.find_element(
                     By.CSS_SELECTOR,
                     f"div[aria-label='Informações de {lead.get_attribute('aria-label')}']",
                 )
+                photo_button = driver.find_element(
+                    By.CSS_SELECTOR,
+                    f"button[aria-label='Foto de {lead.get_attribute('aria-label')}']",
+                )
+                photo_element = photo_button.find_element(By.TAG_NAME, "img")
+                photo_url = photo_element.get_attribute("src")
             except Exception:
                 continue
             phone_number_element = safe_find_element_by_css_selector(
@@ -143,5 +149,7 @@ def process_leads(driver, results: list, entities_with_contacts: list):
                     "nome": lead.get_attribute("aria-label"),
                     "endereco": address,
                     "site": web_site_address,
+                    "foto": photo_url,
                 }
             )
+            results_catched.append(lead)

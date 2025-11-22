@@ -1,0 +1,358 @@
+.operations-card {
+    margin: 32px auto;
+    max-width: 1100px;
+    padding: 32px 36px;
+    border-radius: 32px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    box-shadow: 0 28px 48px rgba(17, 24, 39, 0.14);
+    color: #000;
+}
+
+.operations-card mat-divider {
+    margin: 8px 0 24px;
+    border-color: rgba(63, 81, 181, 0.12);
+}
+
+.hero {
+    display: grid;
+    gap: 28px;
+    background: linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 26px;
+    padding: 32px;
+    align-items: center;
+}
+
+.hero-copy {
+    display: grid;
+    gap: 16px;
+
+    h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #111827;
+    }
+
+    p {
+        margin: 0;
+        color: #000;
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+}
+
+.hero-action {
+    justify-content: flex-start;
+    width: fit-content;
+    border-radius: 999px;
+    border-color: #111827;
+    color: #111827;
+
+    mat-icon {
+        margin-right: 8px;
+    }
+}
+
+.hero-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 18px;
+}
+
+.metric-card {
+    display: grid;
+    gap: 12px;
+    padding: 22px 26px;
+    border-radius: 18px;
+    border: 1px solid #e5e7eb;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+    align-items: center;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+    grid-template-columns: 64px 1fr;
+    color: #000;
+}
+
+.metric-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 36px rgba(15, 23, 42, 0.18);
+}
+
+.metric-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: #111827;
+    display: grid;
+    place-items: center;
+
+    mat-icon {
+        color: #ffffff;
+        font-size: 26px;
+    }
+}
+
+.metric-card strong {
+    font-size: 1.6rem;
+    color: var(--mat-sys-on-surface);
+}
+
+.metric-card span {
+    font-size: 0.95rem;
+    color: var(--mat-sys-on-surface-variant);
+}
+
+.metric-card p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--mat-sys-on-surface-variant);
+}
+
+.metric-content {
+    display: grid;
+    gap: 8px;
+}
+
+.metric-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.metric-label {
+    color: #000;
+}
+
+.metric-help {
+    background: transparent;
+    border: none;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.metric-help mat-icon {
+    font-size: 18px;
+    color: #000;
+}
+
+.metric-help:hover mat-icon,
+.metric-help:focus-visible mat-icon {
+    color: #555;
+}
+
+.metric-description {
+    color: #000;
+}
+
+.operations-list {
+    display: grid;
+    gap: 32px;
+}
+
+.operation-card {
+    border-radius: 24px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 24px 40px rgba(17, 24, 39, 0.12);
+    padding: 28px 30px;
+    display: grid;
+    gap: 20px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.operation-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 28px 46px rgba(17, 24, 39, 0.16);
+}
+
+.operation-card.operation-paused {
+    opacity: 0.75;
+}
+
+.operation-card header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+
+    h3 {
+        margin: 0;
+        font-size: 1.2rem;
+        color: var(--mat-sys-on-surface);
+    }
+
+    span {
+        display: block;
+        margin-top: 6px;
+        color: #000;
+        font-size: 0.95rem;
+    }
+
+    .status-badge {
+        color: #fff;
+    }
+}
+
+.status-badge {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: #111827;
+    color: #fff;
+}
+
+.status-badge.status-paused {
+    background: #1f2937;
+    color: #fff;
+}
+
+.operation-details {
+    display: grid;
+    gap: 8px;
+}
+
+.operation-meta {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #000;
+    font-size: 0.95rem;
+
+    mat-icon {
+        font-size: 18px;
+        color: #111827;
+    }
+}
+
+.network-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.network-pill {
+    padding: 10px 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 14px 24px rgba(17, 24, 39, 0.18);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.network-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 26px rgba(15, 23, 42, 0.18);
+}
+
+.network-icon {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+}
+
+.network-icon img {
+    width: 20px;
+    height: 20px;
+    filter: invert(1) saturate(0) brightness(900%);
+}
+
+.network-label {
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.leads-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #000;
+    font-weight: 600;
+
+    mat-icon {
+        color: #111827;
+    }
+}
+
+footer button {
+    border-radius: 14px;
+}
+
+@media (max-width: 860px) {
+    .hero {
+        padding: 28px;
+    }
+
+    .hero-copy h1 {
+        font-size: 1.75rem;
+    }
+
+    .hero-metrics {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .operations-card {
+        margin: 20px;
+        padding: 24px 20px;
+    }
+
+    .hero {
+        padding: 24px;
+    }
+
+    footer {
+        flex-direction: column;
+        align-items: flex-start;
+
+        button {
+            align-self: stretch;
+        }
+    }
+
+    .operation-card {
+        padding: 24px;
+    }
+
+    .network-list {
+        gap: 12px;
+    }
+
+    .network-pill {
+        padding: 8px 14px;
+        gap: 10px;
+    }
+
+    .metric-card {
+        grid-template-columns: 48px 1fr;
+        padding: 18px 20px;
+    }
+
+    .metric-value {
+        font-size: 1.6rem;
+    }
+}

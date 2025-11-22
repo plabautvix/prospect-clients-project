@@ -13,6 +13,9 @@ class InformationOfLead(BaseModel):
     site: Optional[str] = Field(
         None, description="Website URL of the business or entity"
     )
+    foto: Optional[str] = Field(
+        None, description="URL of the photo of the business or entity"
+    )
 
 
 class LeadsResponse(BaseModel):

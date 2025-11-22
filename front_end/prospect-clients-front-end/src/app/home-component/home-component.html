@@ -1,6 +1,34 @@
-<p>home-component works!</p>
-teste
-
-{{
-    userService.getAccessToken()
-}}
+<header class="home-header container">
+  <div>
+    <h1 class="title">Leads em prospecção</h1>
+    <p class="subtitle">Configure e acompanhe suas operações contínuas.</p>
+  </div>
+  <nav class="actions">
+    <button mat-stroked-button color="primary" routerLink="/operations">
+      <mat-icon fontIcon="travel_explore"></mat-icon>
+      Configurar operações
+    </button>
+  </nav>
+</header>
+<form class="container search-form" (submit)="getLeads($event)">
+    <mat-form-field appearance="outline" class="search-field">
+        <mat-label>Busque por clientes</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput type="search" placeholder="Digite o nome ou e-mail do cliente" [formControl]="searchText"/>
+        <button mat-icon-button matSuffix type="reset" aria-label="Limpar busca">
+            <mat-icon>close</mat-icon>
+        </button>
+        <mat-hint>Pressione Enter para iniciar a busca</mat-hint>
+    </mat-form-field>
+</form>
+<div class="container-cards">
+@for (lead of leadsList; track lead?.nome) {
+    <app-card-lead
+        [nome]="lead?.nome || ''"
+        [telefone]="lead?.telefone || ''"
+        [endereco]="lead?.endereco || ''"
+        [site]="lead?.site || ''"
+        [foto]="lead?.foto || ''">
+    </app-card-lead>
+}
+</div>
