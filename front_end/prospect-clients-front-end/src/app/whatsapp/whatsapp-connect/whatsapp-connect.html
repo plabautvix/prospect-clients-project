@@ -1,0 +1,32 @@
+<mat-card class="whatsapp-card">
+  <div class="header">
+    <mat-icon fontIcon="qr_code_2"></mat-icon>
+    <h3>Conectar WhatsApp</h3>
+  </div>
+
+  <div class="content">
+    <ng-container *ngIf="!whatsapp.isAuthenticated(); else authenticatedTpl">
+      <ng-container *ngIf="qrImageUrl(); else waitingTpl">
+        <img [src]="qrImageUrl()!" alt="QR Code do WhatsApp" class="qr" />
+        <p class="hint">Abra o WhatsApp no celular e escaneie o QR code.</p>
+      </ng-container>
+      <ng-template #waitingTpl>
+        <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+        <p class="hint">Aguardando QR code...</p>
+      </ng-template>
+    </ng-container>
+
+    <ng-template #authenticatedTpl>
+      <div class="success">
+        <div class="checkmark">
+          <div class="checkmark__circle"></div>
+          <div class="checkmark__check"></div>
+        </div>
+        <h4>WhatsApp conectado!</h4>
+        <p class="hint">Autenticação concluída com sucesso.</p>
+      </div>
+    </ng-template>
+  </div>
+</mat-card>
+
+

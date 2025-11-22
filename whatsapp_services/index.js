@@ -1,6 +1,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
+const cors = require('cors');
 
 // Configuração recomendada para evitar problemas com versões do WhatsApp Web
 const client = new Client({
@@ -17,37 +18,136 @@ const client = new Client({
 // --- HTTP Server (Express) ---
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+app.use(cors());
 
 let isReady = false;
+let isAuthenticated = false;
+let lastQr = null;
+let lastAuthFailure = null;
+let lastDisconnectReason = null;
+
+// --- Server-Sent Events (SSE) para QR e status de autenticação ---
+/** @type {Set<import('http').ServerResponse>} */
+const sseClients = new Set();
+
+function writeSseEvent(res, event, data) {
+    try {
+        const payload = typeof data === 'string' ? data : JSON.stringify(data);
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${payload}\n\n`);
+    } catch (e) {
+        // ignora write em conexões encerradas
+    }
+}
+
+function broadcast(event, data) {
+    for (const res of sseClients) {
+        writeSseEvent(res, event, data);
+    }
+}
+
+app.get('/api/whatsapp/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    // flush headers
+    res.flushHeaders && res.flushHeaders();
+
+    sseClients.add(res);
+
+    // Estado inicial
+    writeSseEvent(res, 'hello', { ok: true, ts: Date.now() });
+    writeSseEvent(res, 'ready', isReady);
+    writeSseEvent(res, 'authenticated', isAuthenticated);
+    if (lastQr) {
+        writeSseEvent(res, 'qr', lastQr);
+    }
+    if (lastAuthFailure) {
+        writeSseEvent(res, 'auth_failure', lastAuthFailure);
+    }
+    if (lastDisconnectReason) {
+        writeSseEvent(res, 'disconnected', lastDisconnectReason);
+    }
+
+    req.on('close', () => {
+        sseClients.delete(res);
+        try { res.end(); } catch {}
+    });
+});
+
+app.get('/api/whatsapp/status', (_req, res) => {
+    res.json({
+        ready: isReady,
+        authenticated: isAuthenticated,
+        hasQr: Boolean(lastQr)
+    });
+});
+
+// Retorna informações básicas do cliente autenticado
+app.get('/api/whatsapp/me', async (_req, res) => {
+    try {
+        if (!isAuthenticated) {
+            return res.status(409).json({ ok: false, error: 'not_authenticated' });
+        }
+        // whatsapp-web.js expõe informações em client.info
+        const info = client?.info || {};
+        // Campos comuns: wid, pushname, platform
+        const payload = {
+            ok: true,
+            wid: (info && info.wid && (info.wid._serialized || info.wid.user)) || null,
+            pushname: info.pushname || null,
+            platform: info.platform || null,
+            me: info.me || null
+        };
+        return res.json(payload);
+    } catch (err) {
+        return res.status(500).json({ ok: false, error: 'internal_error', detail: String((err && err.message) || err) });
+    }
+});
 // Estado de leads contatados via /api/landing
 // Map<JID, { stage: 'sent_offer' | 'asked_optin' | 'opted_in', prospect: any, ts: number }>
 const outreachState = new Map();
 const SELLER_JID = '5527988033791@c.us'; // +55 27 98803-3791
 
-// Exibir o QR no terminal em formato de "imagem" (ASCII)
 client.on('qr', (qr) => {
-    console.log('QR RECEIVED, scan the code below:');
-    qrcode.generate(qr, { small: true });
+    // Guardar e transmitir o QR para o front-end
+    lastQr = qr;
+    isAuthenticated = false;
+    console.log('QR code recebido. Aguardando leitura no aplicativo WhatsApp.');
+    // Não gerar QR no terminal; o front-end irá renderizar
+    broadcast('qr', qr);
 });
 
 client.on('ready', () => {
     console.log('Client is ready!');
     isReady = true;
+    broadcast('ready', true);
 });
 
 client.on('authenticated', () => {
     console.log('Authenticated. Session persisted by LocalAuth.');
+    isAuthenticated = true;
+    lastQr = null; // QR não é mais necessário
+    broadcast('authenticated', true);
 });
 
 client.on('auth_failure', (msg) => {
     console.error('Auth failure:', msg);
     console.error('If this persists, delete .wwebjs_auth and re-scan the QR.');
+    isAuthenticated = false;
+    lastAuthFailure = String(msg || 'auth_failure');
+    broadcast('auth_failure', lastAuthFailure);
 });
 
 client.on('disconnected', (reason) => {
     console.warn('Client was disconnected:', reason);
     // Opcional: tentar reinicializar automaticamente
     // client.initialize();
+    isReady = false;
+    isAuthenticated = false;
+    lastDisconnectReason = String(reason || 'unknown');
+    broadcast('disconnected', lastDisconnectReason);
 });
 
 function onlyDigits(str) {

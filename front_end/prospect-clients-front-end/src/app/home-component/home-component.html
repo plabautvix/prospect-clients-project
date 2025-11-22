@@ -10,6 +10,14 @@
     </button>
   </nav>
 </header>
+
+<!-- Acesso à tela dedicada de conexão do WhatsApp -->
+<section class="container" style="margin-top: 12px;">
+  <button mat-stroked-button color="primary" routerLink="/whatsapp">
+    <mat-icon fontIcon="qr_code_2"></mat-icon>
+    Conectar WhatsApp
+  </button>
+</section>
 <form class="container search-form" (submit)="getLeads($event)">
     <mat-form-field appearance="outline" class="search-field">
         <mat-label>Busque por clientes</mat-label>

@@ -1,0 +1,61 @@
+<div class="container whatsapp-page">
+  <mat-card class="card">
+    <div class="header">
+      <mat-icon fontIcon="qr_code_2"></mat-icon>
+      <h2>Conectar WhatsApp</h2>
+    </div>
+
+    <div class="content" *ngIf="!whatsapp.isAuthenticated(); else connectedTpl">
+      <ng-container *ngIf="qrImageUrl(); else waitingTpl">
+        <img [src]="qrImageUrl()!" alt="QR Code do WhatsApp" class="qr" />
+        <p class="hint">Abra o WhatsApp no celular e escaneie o QR code.</p>
+      </ng-container>
+      <ng-template #waitingTpl>
+        <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+        <p class="hint">Aguardando QR code...</p>
+        <button mat-stroked-button color="primary" (click)="refreshQr()">
+          <mat-icon fontIcon="refresh"></mat-icon>
+          Gerar novo QR
+        </button>
+      </ng-template>
+    </div>
+
+    <ng-template #connectedTpl>
+      <div class="success">
+        <div class="checkmark">
+          <div class="checkmark__circle"></div>
+          <div class="checkmark__check"></div>
+        </div>
+        <h3>WhatsApp conectado!</h3>
+      </div>
+    </ng-template>
+  </mat-card>
+
+  <mat-card class="card" *ngIf="whatsapp.isAuthenticated()">
+    <div class="header">
+      <mat-icon fontIcon="person"></mat-icon>
+      <h3>Seu WhatsApp</h3>
+    </div>
+
+    <div class="content">
+      <ng-container *ngIf="!loadingMe(); else loadingTpl">
+        <ng-container *ngIf="me(); else errorTpl">
+          <div class="profile">
+            <div class="row"><span class="label">Nome:</span> <span>{{ me()?.pushname || '—' }}</span></div>
+            <div class="row"><span class="label">Número (WID):</span> <span>{{ me()?.wid || '—' }}</span></div>
+            <div class="row"><span class="label">Plataforma:</span> <span>{{ me()?.platform || '—' }}</span></div>
+          </div>
+        </ng-container>
+      </ng-container>
+      <ng-template #loadingTpl>
+        <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+        <p class="hint">Carregando informações do seu WhatsApp...</p>
+      </ng-template>
+      <ng-template #errorTpl>
+        <p class="error" *ngIf="errorMe()">{{ errorMe() }}</p>
+      </ng-template>
+    </div>
+  </mat-card>
+</div>
+
+
