@@ -13,6 +13,8 @@ interface Lead {
   telefone: string;
   site: string | null;
   foto: string | null;
+  avaliacao: string | null;
+  quantidade_avaliacoes: string | null;
 }
 
 @Injectable({

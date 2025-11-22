@@ -12,6 +12,18 @@
   <mat-card-header>
     <mat-card-title>{{ nome() || 'Lead sem nome' }}</mat-card-title>
     <mat-card-subtitle>{{ endereco() || 'Endereço não informado' }}</mat-card-subtitle>
+    
+    @if (avaliacao()) {
+      <div class="rating-container">
+        <span class="score">{{ avaliacao() }}</span>
+        <div class="stars">
+          @for (icon of starArray(); track $index) {
+            <mat-icon [fontIcon]="icon" class="star-icon"></mat-icon>
+          }
+        </div>
+        <span class="reviews" *ngIf="quantidade_avaliacoes()">({{ quantidade_avaliacoes() }})</span>
+      </div>
+    }
   </mat-card-header>
 
   <mat-card-content>

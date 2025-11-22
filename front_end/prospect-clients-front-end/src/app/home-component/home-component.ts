@@ -10,13 +10,15 @@ import { RouterLink } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { WhatsappApiService } from '../services/whatsapp-api.service';
 import { BatchMessageDialog } from './batch-message-dialog/batch-message-dialog';
-interface Lead {
+
+export interface Lead {
   nome: string;
   endereco: string;
   telefone: string;
   site: string | null;
   foto: string | null;
 }
+
 @Component({
   selector: 'app-home-component',
   imports: [MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, CardLead, ReactiveFormsModule, RouterLink],
