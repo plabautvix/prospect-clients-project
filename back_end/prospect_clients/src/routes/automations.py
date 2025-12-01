@@ -14,7 +14,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from prospect_clients.src.models.schemas.data_returned_selenium import (LeadsResponse)
-
+from prospect_clients.src.models.tables.operations import Operations
+from prospect_clients.src.utils.publisher import publish_message
 router = APIRouter()
 
 options = Options()
@@ -23,6 +24,50 @@ options = Options()
 snap_firefox_real = "/snap/firefox/current/usr/lib/firefox/firefox"
 if os.path.exists(snap_firefox_real):
     options.binary_location = snap_firefox_real
+
+
+@router.get(
+   "/operations/maps/activate",
+    status_code=HTTPStatus.OK,
+    summary="Send menssage of service for running leads scraping",
+    response_description="A confirmation message that the scraping process has started."
+)
+def send_message_maps_service(serach_text: str, title: str = None):
+    """
+    This function sends a message to the MQTT broker to start the lead scraping
+    process for a specified search text.
+
+    Args:
+        search_text (str): The text to search for on Google Maps.
+    Returns:
+        dict: A confirmation message that the scraping process has started.
+    """
+    publish_message(
+        "prospect/maps",
+        {"status": 1, "search_text": serach_text, "title": title},
+    )
+    return {"message": "Scraping process started"}
+
+
+@router.get(
+    "/operations/maps/deactivate",
+    status_code=HTTPStatus.OK,
+    summary="Send menssage of service for stopping leads scraping",
+    response_description="A confirmation message that the scraping process has stopped."
+)
+def send_message_stop_maps_service(id_operation: int):
+    """
+    This function sends a message to the MQTT broker to stop the lead scraping
+    process for a specified operation ID.
+
+    Args:
+        id_operation (int): The ID of the operation to stop.
+    """
+    publish_message(
+        "prospect/maps",
+        {"status": 0, "id_operation": id_operation},
+    )
+    return {"message": "Scraping process stopped"}
 
 
 @router.get(

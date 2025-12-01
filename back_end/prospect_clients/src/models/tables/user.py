@@ -1,9 +1,6 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Integer, String
-
-
-class Base(DeclarativeBase):
-    pass
+from .base import Base
 
 
 class User(Base):

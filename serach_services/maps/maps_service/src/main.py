@@ -1,15 +1,12 @@
-from maps_service.src.configs.broker_configs import mqtt_broker_configs
-from maps_service.src.maps_service.client_connection import MQTTClientConnection
+import time
+from client_mqtt.configs.broker_configs import mqtt_broker_configs
+from client_mqtt.client_connection import MQTTClientConnection
 
-
-# Mensageria, seria qualquer forma de comunicação entre softwares utilizando um broker. (Só para não esquecer)
+# Mensageria seria a tecnica de enviar mensagens entre sistemas distribuídos.
 
 def main():
-
-
     client = MQTTClientConnection(mqtt_broker_configs).start_connection()
-
-
 
 if __name__ == "__main__":
     main()
+    while True: time.sleep(0.001)  # Mantém o script rodando
