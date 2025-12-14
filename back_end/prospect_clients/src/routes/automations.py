@@ -8,7 +8,7 @@ businesses and returns them as a list of dictionaries.
 import time
 import os
 from http import HTTPStatus
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -16,6 +16,7 @@ from selenium.webdriver.firefox.options import Options
 from prospect_clients.src.models.schemas.data_returned_selenium import (LeadsResponse)
 from prospect_clients.src.models.tables.operations import Operations
 from prospect_clients.src.utils.publisher import publish_message
+from prospect_clients.src.utils.security import get_current_user
 router = APIRouter()
 
 options = Options()
@@ -26,49 +27,57 @@ if os.path.exists(snap_firefox_real):
     options.binary_location = snap_firefox_real
 
 
-@router.get(
+@router.post(
    "/operations/maps/activate",
     status_code=HTTPStatus.OK,
-    summary="Send menssage of service for running leads scraping",
-    response_description="A confirmation message that the scraping process has started."
+    summary="Initiate lead scraping and messaging via Google Maps service",
+    description=(
+        "This endpoint triggers a service that searches for leads on Google Maps. "
+        "Subsequently, it retrieves the contact number found and sends a message to it, "
+        "using the content provided in the 'message_user' parameter."
+    ),
+    response_description="A confirmation message that the scraping and messaging process has started."
 )
-def send_message_maps_service(serach_text: str, title: str = None):
+def send_message_maps_service(serach_text: str, message_user: str,  title: str = None, current_user: dict = Depends(get_current_user)):
     """
     This function sends a message to the MQTT broker to start the lead scraping
     process for a specified search text.
 
     Args:
         search_text (str): The text to search for on Google Maps.
+        message_user (str): The message content to be sent to the scraped leads.
+        title (str, optional): An optional title for the operation.
+        current_user (dict): The current authenticated user.
     Returns:
         dict: A confirmation message that the scraping process has started.
     """
     publish_message(
         "prospect/maps",
-        {"status": 1, "search_text": serach_text, "title": title},
+        {"status": 1, "search_text": serach_text, "title": title, "user_id": current_user["user_id"], "token": current_user["token"], "message_user": message_user},
     )
     return {"message": "Scraping process started"}
 
 
-@router.get(
+@router.put(
     "/operations/maps/deactivate",
     status_code=HTTPStatus.OK,
     summary="Send menssage of service for stopping leads scraping",
     response_description="A confirmation message that the scraping process has stopped."
 )
-def send_message_stop_maps_service(id_operation: int):
+def send_message_stop_maps_service(id_operation: int, current_user: dict = Depends(get_current_user)):
     """
     This function sends a message to the MQTT broker to stop the lead scraping
     process for a specified operation ID.
 
     Args:
         id_operation (int): The ID of the operation to stop.
+        current_user (dict): The current authenticated user.
     """
     publish_message(
         "prospect/maps",
-        {"status": 0, "id_operation": id_operation},
+        {"status": 0, "id_operation": id_operation, "user_id": current_user["user_id"], "token": current_user["token"]},
     )
     return {"message": "Scraping process stopped"}
-
 
 @router.get(
 "/leads", 
@@ -76,7 +85,7 @@ response_model=LeadsResponse,
 status_code=HTTPStatus.OK,
 response_description="A list of leads with their contact information."
 )
-def read_route(text_serach: str):
+def read_route(text_serach: str, _: dict = Depends(get_current_user)):
     """
     This function uses Selenium to scrape contact information from Google Maps
     for businesses in a specified location. It collects phone numbers, names,

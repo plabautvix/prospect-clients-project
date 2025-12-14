@@ -10,8 +10,8 @@ class MQTTClientConnection:
     
 
     def start_connection(self) -> mqtt.Client:
-        # Forçar protocolo MQTT v3.1.1 para compatibilidade com callbacks
         client = mqtt.Client(client_id=self._client_name, protocol=mqtt.MQTTv311)
+        client.user_data_set({"threads": {}})
         client.on_subscribe = on_subscribe
         client.on_connect = connect_callback
         client.on_message = on_message

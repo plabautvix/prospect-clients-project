@@ -452,9 +452,20 @@ app.post('/api/landing', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 3001;
+const server = app.listen(PORT, () => {
     console.log(`HTTP server listening on http://localhost:${PORT}`);
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`\n[ERRO] A porta ${PORT} já está em uso!`);
+        console.error(`Provavelmente o servidor já está rodando em outro terminal.`);
+        console.error(`Tente fechar o processo anterior ou usar outra porta.\n`);
+        process.exit(1);
+    } else {
+        throw err;
+    }
 });
 
 client.on('message', async (msg) => {

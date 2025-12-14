@@ -19,5 +19,6 @@ class Operations(Base):
     id_operation: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     operation_name: Mapped[str] = mapped_column(String, nullable=False)
     search_text: Mapped[str] = mapped_column(String, nullable=False)
+    message_for_lead: Mapped[str] = mapped_column(String, nullable=True)
     status: Mapped[int] = mapped_column(Integer, nullable=False)
     id_user: Mapped[int] = mapped_column(ForeignKey("user.id_person"), nullable=True)

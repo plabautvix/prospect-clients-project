@@ -1,7 +1,9 @@
 import sqlite3
+import threading
 import json
+import pika
 from client_mqtt.configs.broker_configs import mqtt_broker_configs
-
+from automations.prospect_leads import prospect_leads
 
 def connect_callback(client, userdata, flags, rc, properties=None):
     """
@@ -32,6 +34,13 @@ def on_subscribe(client, userdata, mid, granted_qos):
     """
     print(f"Inscrição realizada com sucesso. MID: {mid}, QoS concedido: {granted_qos}")
 
+def connect_to_rabbitmq():
+    connection_parameters = pika.ConnectionParameters(host='localhost',
+                                                      port=5672,
+                                                      credentials=pika.PlainCredentials('guest', 'guest'))
+    channel = pika.BlockingConnection(connection_parameters).channel()
+    return channel
+
 
 def on_message(client, userdata, msg):
     """
@@ -42,7 +51,7 @@ def on_message(client, userdata, msg):
         userdata: The private user data as set in Client() or userdata_set().
         msg (mqtt.MQTTMessage): An instance of MQTTMessage, which contains topic, payload, qos, retain.
     """
-
+    threads: dict = userdata.get("threads")
     conn = sqlite3.connect('C:\\Users\\Pedro\\Documents\\Prospect Clients\\prospect-clients-project\\back_end\\test.db')
     cursor = conn.cursor()
 
@@ -51,22 +60,24 @@ def on_message(client, userdata, msg):
 
     if message_object.get("status") == 1:
         cursor.execute("""
-            INSERT INTO operations (operation_name, status, search_text)
-            VALUES (?, ?, ?)
-        """, (message_object.get("title"), 1, message_object.get("search_text")))
-
+            INSERT INTO operations (operation_name, status, search_text, message_for_lead)
+            VALUES (?, ?, ?, ?)
+        """, (message_object.get("title"), 1, message_object.get("search_text"), message_object.get("message_user")))
+        id_operation = cursor.lastrowid
         conn.commit()
-        print("Operação de scraping iniciada e registrada no banco de dados.")
+        stop_event = threading.Event()
+        channel_rabbitmq = connect_to_rabbitmq()
+        thread = threading.Thread(target=prospect_leads, args=(message_object.get("search_text"), message_object.get("message_user"), stop_event, message_object.get("token"), channel_rabbitmq), name=message_object.get("title"), )
+        thread.start()
+        threads[id_operation] = {"thread": thread, "event": stop_event}
     else:
-        cursor.execute("""
+        cursor.execute(f"""
             UPDATE operations
             SET status = 0
-            WHERE id_operation = ?
-        """, (message_object.get("id_operation"),))
-
+            WHERE id_operation = {message_object.get("id_operation")}
+        """)
+        thread = threads.get(message_object.get("id_operation"))
+        thread["event"].set()
+        thread["thread"].join()
+        del threads[message_object.get("id_operation")]
         conn.commit()
-        print("Operação de scraping parada e atualizada no banco de dados.")
-    print(type(message))
-
-
-    print(f"Mensagem recebida no tópico {msg.topic}: {msg.payload.decode()}")

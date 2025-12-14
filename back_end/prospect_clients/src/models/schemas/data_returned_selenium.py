@@ -22,3 +22,4 @@ class LeadsResponse(BaseModel):
     leads: list[InformationOfLead] = Field(
         ..., description="List of leads with their contact information"
     )
+    

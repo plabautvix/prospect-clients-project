@@ -3,9 +3,8 @@ from client_mqtt.configs.broker_configs import mqtt_broker_configs
 from client_mqtt.client_connection import MQTTClientConnection
 
 # Mensageria seria a tecnica de enviar mensagens entre sistemas distribuídos.
-
 def main():
-    client = MQTTClientConnection(mqtt_broker_configs).start_connection()
+    MQTTClientConnection(mqtt_broker_configs).start_connection()
 
 if __name__ == "__main__":
     main()
