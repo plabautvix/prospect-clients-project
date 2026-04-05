@@ -1,8 +1,8 @@
 from prospect_clients.src.configurations.database import engine
 from prospect_clients.src.models.tables.base import Base
-from prospect_clients.src.routes.automations import router as automations_router
-from prospect_clients.src.routes.user import router as users_router
-from prospect_clients.src.routes.leads import router as leads_router
+from prospect_clients.src.controllers.automations_controller import router as automations_router
+from prospect_clients.src.controllers.user_controller import router as users_router
+from prospect_clients.src.controllers.leads_controller import router as leads_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
