@@ -1,0 +1,83 @@
+services:
+
+  # ─── Infrastructure ───────────────────────────────────────────────────────
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # management UI at http://localhost:15672 (guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── Application services ─────────────────────────────────────────────────
+
+  backend:
+    build: ./back_end
+    ports:
+      - "8000:8000"
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+    volumes:
+      - ./back_end:/app
+    depends_on:
+      - mosquitto
+
+  maps-service:
+    build: ./serach_services/maps/maps_service
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_EXCHANGE: fila_mensagens
+      RABBITMQ_ROUTING_KEY: enviar
+      BACKEND_API_URL: http://backend:8000
+      SELENIUM_HEADLESS: "true"
+    volumes:
+      - ./serach_services/maps/maps_service/src:/app/src
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+      backend:
+        condition: service_started
+
+  whatsapp:
+    build: ./whatsapp_services
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./whatsapp_services:/app
+      - /app/node_modules
+      - whatsapp_auth:/app/.wwebjs_auth
+    environment:
+      PORT: 3001
+
+  frontend:
+    build: ./front_end
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - whatsapp
+
+volumes:
+  whatsapp_auth:
