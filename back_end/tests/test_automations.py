@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from prospect_clients.src.services.automations_service import AutomationsService
 
@@ -12,21 +12,15 @@ class TestAutomationsService:
             message_user="Ola!",
             user_id=1,
             token="tok123",
+            id_operation=7,
             title="Pizzarias",
         )
 
         assert result == {"message": "Scraping process started"}
-        mock_publish.assert_called_once_with(
-            "prospect/maps",
-            {
-                "status": 1,
-                "search_text": "pizzarias SP",
-                "title": "Pizzarias",
-                "user_id": 1,
-                "token": "tok123",
-                "message_user": "Ola!",
-            },
-        )
+        payload = mock_publish.call_args[0][1]
+        assert payload["status"] == 1
+        assert payload["id_operation"] == 7
+        assert payload["search_text"] == "pizzarias SP"
 
     @patch("prospect_clients.src.services.automations_service.publish_message")
     def test_deactivate_maps_scraping(self, mock_publish):
@@ -38,34 +32,25 @@ class TestAutomationsService:
         assert result == {"message": "Scraping process stopped"}
         mock_publish.assert_called_once_with(
             "prospect/maps",
-            {
-                "status": 0,
-                "id_operation": 42,
-                "user_id": 1,
-                "token": "tok123",
-            },
+            {"status": 0, "id_operation": 42, "user_id": 1, "token": "tok123"},
         )
 
     @patch("prospect_clients.src.services.automations_service.publish_message")
     def test_activate_without_title(self, mock_publish):
         service = AutomationsService()
-        result = service.activate_maps_scraping(
-            search_text="lojas", message_user="Oi", user_id=2, token="t"
+        service.activate_maps_scraping(
+            search_text="lojas", message_user="Oi", user_id=2, token="t", id_operation=1
         )
-
-        assert result["message"] == "Scraping process started"
-        call_payload = mock_publish.call_args[0][1]
-        assert call_payload["title"] is None
+        assert mock_publish.call_args[0][1]["title"] is None
 
 
 class TestAutomationsEndpoints:
-    @patch("prospect_clients.src.services.automations_service.publish_message")
-    def test_activate_endpoint(self, mock_publish, client):
-        # Create user and get token
+    @patch("prospect_clients.src.controllers.automations_controller.AutomationsService")
+    def test_activate_endpoint_creates_operation(self, mock_service_cls, client):
+        mock_service_cls.return_value.activate_maps_scraping.return_value = {"message": "ok"}
+
         client.post("/users/", json={"email": "auto@test.com", "password": "pass"})
-        login = client.post(
-            "/users/login", data={"username": "auto@test.com", "password": "pass"}
-        )
+        login = client.post("/users/login", data={"username": "auto@test.com", "password": "pass"})
         token = login.json()["access_token"]
 
         response = client.post(
@@ -73,16 +58,24 @@ class TestAutomationsEndpoints:
             params={"serach_text": "padarias", "message_user": "Ola"},
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 200
-        assert response.json()["message"] == "Scraping process started"
-        mock_publish.assert_called_once()
+        assert response.status_code == 201
+        data = response.json()
+        # Deve retornar a operação criada no DB
+        assert data["operation_name"] == "padarias"
+        assert data["search_text"] == "padarias"
+        assert data["status"] == 1
+        assert "id_operation" in data
+        # Maps service deve ter sido chamado com o id_operation
+        mock_service_cls.return_value.activate_maps_scraping.assert_called_once()
+        call_kwargs = mock_service_cls.return_value.activate_maps_scraping.call_args[1]
+        assert call_kwargs["id_operation"] == data["id_operation"]
 
-    @patch("prospect_clients.src.services.automations_service.publish_message")
-    def test_deactivate_endpoint(self, mock_publish, client):
+    @patch("prospect_clients.src.controllers.automations_controller.AutomationsService")
+    def test_deactivate_endpoint(self, mock_service_cls, client):
+        mock_service_cls.return_value.deactivate_maps_scraping.return_value = {"message": "ok"}
+
         client.post("/users/", json={"email": "deact@test.com", "password": "pass"})
-        login = client.post(
-            "/users/login", data={"username": "deact@test.com", "password": "pass"}
-        )
+        login = client.post("/users/login", data={"username": "deact@test.com", "password": "pass"})
         token = login.json()["access_token"]
 
         response = client.put(

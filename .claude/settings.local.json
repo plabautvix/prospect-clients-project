@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_user.py -v)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_leads.py -v)",
+      "Bash(python -m pytest tests/test_automations.py -v)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m pytest tests/test_operations.py -v)",
+      "Bash(python -c \"import dotenv; print\\('dotenv ok'\\)\")",
+      "Bash(python -c \"import pytest; print\\('pytest ok'\\)\")",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(python -m pytest tests/test_operation_service.py -v)"
+    ]
+  }
+}

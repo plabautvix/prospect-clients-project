@@ -1,11 +1,19 @@
-import time
-from client_mqtt.configs.broker_configs import mqtt_broker_configs
-from client_mqtt.client_connection import MQTTClientConnection
+import logging
 
-# Mensageria seria a tecnica de enviar mensagens entre sistemas distribuídos.
+from messaging.mqtt_client import run_mqtt
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
+
 def main():
-    MQTTClientConnection(mqtt_broker_configs).start_connection()
+    logger.info("Maps service starting...")
+    run_mqtt()
+
 
 if __name__ == "__main__":
     main()
-    while True: time.sleep(0.001)  # Mantém o script rodando

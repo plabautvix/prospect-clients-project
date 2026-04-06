@@ -6,6 +6,9 @@ class LeadsService:
     def __init__(self, repository: LeadsRepository):
         self.repository = repository
 
+    def get_leads(self, user_id: int, skip: int = 0, limit: int = 100):
+        return self.repository.get_by_user(user_id, skip=skip, limit=limit)
+
     def register_leads(self, leads: list[LeadSchema], user_id: int):
         leads_data = [lead.model_dump(exclude={"id_lead"}) for lead in leads]
 

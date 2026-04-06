@@ -28,6 +28,14 @@ class OperationsRepository:
             .first()
         )
 
+    def get_by_user(self, user_id: int) -> list[Operations]:
+        return (
+            self.db.query(Operations)
+            .filter(Operations.id_user == user_id)
+            .order_by(Operations.id_operation.desc())
+            .all()
+        )
+
     def update_status(self, operation_id: int, status: int) -> Operations | None:
         operation = self.get_by_id(operation_id)
         if operation:

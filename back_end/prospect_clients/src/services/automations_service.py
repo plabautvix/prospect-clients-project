@@ -20,12 +20,13 @@ def _get_firefox_options() -> Options:
 class AutomationsService:
     def activate_maps_scraping(
         self, search_text: str, message_user: str, user_id: int, token: str,
-        title: str | None = None,
+        id_operation: int, title: str | None = None,
     ) -> dict:
         publish_message(
             "prospect/maps",
             {
                 "status": 1,
+                "id_operation": id_operation,
                 "search_text": search_text,
                 "title": title,
                 "user_id": user_id,

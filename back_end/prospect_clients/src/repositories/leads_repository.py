@@ -27,3 +27,14 @@ class LeadsRepository:
         self.db.add_all(entries)
         self.db.commit()
         return entries
+
+    def get_by_user(self, user_id: int, skip: int = 0, limit: int = 100) -> list[Leads]:
+        return (
+            self.db.query(Leads)
+            .join(UserLeadHistory, UserLeadHistory.lead_id == Leads.id_lead)
+            .filter(UserLeadHistory.user_id == user_id)
+            .distinct()
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )

@@ -16,6 +16,19 @@ def _get_service(db: Session = Depends(get_db)) -> LeadsService:
     return LeadsService(LeadsRepository(db))
 
 
+@router.get(
+    "/",
+    summary="List leads for current user",
+)
+def list_leads(
+    skip: int = 0,
+    limit: int = 100,
+    service: LeadsService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
+):
+    return service.get_leads(current_user["user_id"], skip=skip, limit=limit)
+
+
 @router.post(
     "/",
     status_code=HTTPStatus.CREATED,
