@@ -19,25 +19,22 @@ function logout() {
 </script>
 
 <template>
-  <aside class="flex w-60 shrink-0 flex-col bg-gray-900 text-white">
+  <aside class="flex w-64 shrink-0 flex-col border-r border-brd-light bg-[#191c1a]">
     <!-- Logo -->
-    <div class="flex h-16 items-center gap-2 px-5 border-b border-gray-700">
-      <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600">
-        <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      </div>
-      <span class="text-base font-semibold tracking-tight">Prospect</span>
+    <div class="flex h-16 items-center px-6">
+      <span class="text-xl font-extrabold tracking-tight">
+        <span class="text-brand">Pr</span><span class="text-txt-primary">ospect</span>
+      </span>
     </div>
 
     <!-- Nav -->
-    <nav class="flex-1 space-y-0.5 px-3 py-4">
+    <nav class="flex-1 space-y-1 px-3 py-6">
       <RouterLink
         v-for="item in nav"
         :key="item.to"
         :to="item.to"
-        class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white"
-        active-class="bg-gray-800 text-white"
+        class="group flex items-center gap-3 rounded-pill px-4 py-2.5 text-sm font-medium text-[#8a918c] transition-all duration-200 hover:bg-white/[0.06] hover:text-txt-primary"
+        active-class="!bg-brand !text-black"
       >
         <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" :d="item.icon" />
@@ -47,15 +44,15 @@ function logout() {
     </nav>
 
     <!-- User -->
-    <div class="border-t border-gray-700 px-3 py-3">
-      <div class="flex items-center gap-3 rounded-lg px-3 py-2">
-        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold">
+    <div class="border-t border-brd-light px-3 py-4">
+      <div class="flex items-center gap-3 rounded-pill px-4 py-2">
+        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-black">
           {{ auth.userEmail?.[0]?.toUpperCase() ?? 'U' }}
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-xs text-gray-300">{{ auth.userEmail }}</p>
+          <p class="truncate text-xs text-txt-secondary">{{ auth.userEmail }}</p>
         </div>
-        <button @click="logout" class="shrink-0 text-gray-400 hover:text-white transition-colors" title="Sair">
+        <button @click="logout" class="shrink-0 text-txt-secondary hover:text-brand transition-colors" title="Sair">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>

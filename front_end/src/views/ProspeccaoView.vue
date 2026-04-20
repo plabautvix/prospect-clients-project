@@ -48,19 +48,19 @@ async function stopOp(id) {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-8">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Prospecção</h1>
-      <p class="mt-1 text-sm text-gray-500">Inicie uma operação de busca no Google Maps e colete leads automaticamente.</p>
+      <h1 class="text-2xl font-extrabold text-txt-primary">Prospecção</h1>
+      <p class="mt-1 text-sm text-txt-secondary">Inicie uma operação de busca no Google Maps e colete leads automaticamente.</p>
     </div>
 
     <!-- Form -->
     <div class="card">
-      <h2 class="mb-4 font-semibold text-gray-900">Nova operação</h2>
-      <form @submit.prevent="startOp" class="space-y-4">
+      <h2 class="mb-5 font-semibold text-txt-primary">Nova operação</h2>
+      <form @submit.prevent="startOp" class="space-y-5">
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="label">Busca no Google Maps <span class="text-red-500">*</span></label>
+            <label class="label">Busca no Google Maps <span class="text-red-400">*</span></label>
             <input v-model="searchText" type="text" placeholder="Ex: barbearias em São Paulo" class="input" required />
           </div>
           <div>
@@ -69,7 +69,7 @@ async function stopOp(id) {
           </div>
         </div>
         <div>
-          <label class="label">Modelo de mensagem <span class="text-red-500">*</span></label>
+          <label class="label">Modelo de mensagem <span class="text-red-400">*</span></label>
           <textarea
             v-model="messageTemplate"
             rows="3"
@@ -77,11 +77,11 @@ async function stopOp(id) {
             class="input resize-none"
             required
           />
-          <p class="mt-1 text-xs text-gray-400">Use <code class="rounded bg-gray-100 px-1 text-gray-600">{nome}</code> para inserir o nome do negócio automaticamente.</p>
+          <p class="mt-1.5 text-xs text-txt-secondary/60">Use <code class="rounded-md bg-surface-hover px-1.5 py-0.5 text-brand text-[11px]">{nome}</code> para inserir o nome do negócio automaticamente.</p>
         </div>
 
-        <div v-if="formError" class="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{{ formError }}</div>
-        <div v-if="formSuccess" class="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">{{ formSuccess }}</div>
+        <div v-if="formError" class="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400">{{ formError }}</div>
+        <div v-if="formSuccess" class="rounded-xl bg-brand/10 border border-brand/20 px-4 py-2.5 text-sm text-brand">{{ formSuccess }}</div>
 
         <button type="submit" :disabled="starting" class="btn-primary">
           <svg v-if="starting" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -99,7 +99,7 @@ async function stopOp(id) {
     <!-- Operações ativas -->
     <div class="card">
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="font-semibold text-gray-900">Em andamento</h2>
+        <h2 class="font-semibold text-txt-primary">Em andamento</h2>
         <button @click="store.fetchOperations()" class="btn-secondary text-xs gap-1.5">
           <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -109,27 +109,27 @@ async function stopOp(id) {
       </div>
 
       <div v-if="activeOps.length === 0" class="py-10 text-center">
-        <svg class="mx-auto h-10 w-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="mx-auto h-10 w-10 text-txt-secondary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <p class="mt-2 text-sm text-gray-400">Nenhuma operação em andamento.</p>
+        <p class="mt-2 text-sm text-txt-secondary/50">Nenhuma operação em andamento.</p>
       </div>
 
       <div v-else class="space-y-3">
         <div
           v-for="op in activeOps"
           :key="op.id_operation"
-          class="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3"
+          class="flex items-center justify-between rounded-xl border border-brand/15 bg-brand/5 px-4 py-3"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <span class="relative flex h-2.5 w-2.5">
-                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-50"></span>
+                <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand"></span>
               </span>
-              <p class="text-sm font-medium text-gray-900">{{ op.operation_name }}</p>
+              <p class="text-sm font-medium text-txt-primary">{{ op.operation_name }}</p>
             </div>
-            <p class="mt-0.5 truncate pl-4 text-xs text-gray-500">{{ op.search_text }}</p>
+            <p class="mt-0.5 truncate pl-4 text-xs text-txt-secondary/60">{{ op.search_text }}</p>
           </div>
           <button
             @click="stopOp(op.id_operation)"
@@ -148,21 +148,21 @@ async function stopOp(id) {
 
     <!-- Histórico -->
     <div v-if="inactiveOps.length > 0" class="card">
-      <h2 class="mb-4 font-semibold text-gray-900">Histórico</h2>
+      <h2 class="mb-4 font-semibold text-txt-primary">Histórico</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-gray-100">
-              <th class="pb-2 text-left font-medium text-gray-500">Nome</th>
-              <th class="pb-2 text-left font-medium text-gray-500">Busca</th>
-              <th class="pb-2 text-left font-medium text-gray-500">Status</th>
+            <tr class="border-b border-brd-light">
+              <th class="pb-3 text-left font-medium text-txt-secondary">Nome</th>
+              <th class="pb-3 text-left font-medium text-txt-secondary">Busca</th>
+              <th class="pb-3 text-left font-medium text-txt-secondary">Status</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-50">
+          <tbody class="divide-y divide-brd-light">
             <tr v-for="op in inactiveOps" :key="op.id_operation">
-              <td class="py-2 font-medium text-gray-900">{{ op.operation_name }}</td>
-              <td class="py-2 text-gray-500">{{ op.search_text }}</td>
-              <td class="py-2"><span class="badge-gray">Encerrada</span></td>
+              <td class="py-3 font-medium text-txt-primary">{{ op.operation_name }}</td>
+              <td class="py-3 text-txt-secondary">{{ op.search_text }}</td>
+              <td class="py-3"><span class="badge-gray">Encerrada</span></td>
             </tr>
           </tbody>
         </table>

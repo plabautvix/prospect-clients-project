@@ -39,6 +39,8 @@ services:
 
   maps-service:
     build: ./serach_services/maps/maps_service
+    profiles:
+      - headless
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883

@@ -27,44 +27,39 @@ async function submit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gray-900 px-4">
+  <div class="flex min-h-screen items-center justify-center bg-dark-base px-4">
     <div class="w-full max-w-sm">
       <!-- Logo -->
-      <div class="mb-8 flex flex-col items-center gap-3">
-        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600">
-          <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </div>
-        <div class="text-center">
-          <h1 class="text-xl font-bold text-white">Prospect Clients</h1>
-          <p class="mt-1 text-sm text-gray-400">Entre na sua conta para continuar</p>
-        </div>
+      <div class="mb-10 flex flex-col items-center gap-3">
+        <h1 class="text-4xl font-extrabold tracking-tight">
+          <span class="text-brand">Pr</span><span class="text-txt-primary">ospect</span>
+        </h1>
+        <p class="text-sm text-txt-secondary">Entre na sua conta para continuar</p>
       </div>
 
-      <form @submit.prevent="submit" class="space-y-4 rounded-xl bg-gray-800 p-6 shadow-xl">
+      <form @submit.prevent="submit" class="card space-y-5">
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">E-mail</label>
+          <label class="label">E-mail</label>
           <input
             v-model="email"
             type="email"
             placeholder="voce@exemplo.com"
             required
-            class="block w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            class="input"
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Senha</label>
+          <label class="label">Senha</label>
           <input
             v-model="password"
             type="password"
             placeholder="••••••••"
             required
-            class="block w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            class="input"
           />
         </div>
 
-        <div v-if="error" class="rounded-lg bg-red-900/40 border border-red-700 px-3 py-2 text-sm text-red-300">
+        <div v-if="error" class="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400">
           {{ error }}
         </div>
 
