@@ -1,6 +1,7 @@
 import time
 import logging
 
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ def extract_lead_info(driver, lead_element) -> dict | None:
 
         info_panel = driver.find_element(
             By.CSS_SELECTOR,
-            f"div[aria-label='Informacoes de {lead_name}']",
+            f"div[aria-label='Informações de {lead_name}']",
         )
         photo_button = driver.find_element(
             By.CSS_SELECTOR,
@@ -62,10 +63,14 @@ def extract_lead_info(driver, lead_element) -> dict | None:
     }
 
 
-def process_leads(driver, results: list, entities: list, results_catched: list, max_leads: int = 20):
+def process_leads(driver, results: list, entities: list, seen_hrefs: set, max_leads: int = 20):
     for lead in results:
-        class_attr = lead.get_attribute("class") or ""
-        target_attr = lead.get_attribute("target") or ""
+        try:
+            href = lead.get_attribute("href") or ""
+            class_attr = lead.get_attribute("class") or ""
+            target_attr = lead.get_attribute("target") or ""
+        except StaleElementReferenceException:
+            continue
 
         if len(class_attr.split(" ")) != 1 or target_attr == "_blank":
             continue
@@ -75,7 +80,7 @@ def process_leads(driver, results: list, entities: list, results_catched: list, 
             continue
 
         entities.append(info)
-        results_catched.append(lead)
+        seen_hrefs.add(href)
 
         if len(entities) >= max_leads:
             return

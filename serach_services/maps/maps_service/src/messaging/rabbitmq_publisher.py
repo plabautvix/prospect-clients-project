@@ -31,6 +31,17 @@ class RabbitMQPublisher:
         )
         self._connection = pika.BlockingConnection(params)
         self._channel = self._connection.channel()
+        self._channel.exchange_declare(
+            exchange=settings.RABBITMQ_EXCHANGE,
+            exchange_type="direct",
+            durable=True,
+        )
+        self._channel.queue_declare(queue=settings.RABBITMQ_ROUTING_KEY, durable=True)
+        self._channel.queue_bind(
+            queue=settings.RABBITMQ_ROUTING_KEY,
+            exchange=settings.RABBITMQ_EXCHANGE,
+            routing_key=settings.RABBITMQ_ROUTING_KEY,
+        )
         logger.info("RabbitMQ connected: %s:%s", settings.RABBITMQ_HOST, settings.RABBITMQ_PORT)
 
     def _ensure_connected(self):

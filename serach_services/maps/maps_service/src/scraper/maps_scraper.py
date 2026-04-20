@@ -6,6 +6,8 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 from config.settings import settings
 from scraper.lead_parser import process_leads
@@ -28,29 +30,49 @@ def scrape_maps(search_text: str, stop_event: threading.Event, on_leads_found: c
 
     try:
         driver.get("https://www.google.com/maps/search/")
-        search_input = driver.find_element(By.ID, "searchboxinput")
+        search_input = WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR, "#searchboxinput, #ucc-1, input[name='q']"
+            ))
+        )
         search_input.clear()
-        time.sleep(2)
+        time.sleep(1)
         search_input.send_keys(search_text)
         search_input.send_keys(Keys.RETURN)
         time.sleep(5)
 
-        results_catched = []
+        seen_hrefs: set[str] = set()
+        empty_rounds = 0
+        max_empty_rounds = 5
 
         while not stop_event.is_set():
             try:
                 entities: list[dict] = []
-                new_results = [
-                    el for el in driver.find_elements(By.TAG_NAME, "A")
-                    if el not in results_catched
-                ]
-                process_leads(driver, new_results, entities, results_catched)
+                all_links = driver.find_elements(By.TAG_NAME, "A")
+                new_results = []
+                for el in all_links:
+                    try:
+                        href = el.get_attribute("href") or ""
+                        if href and href not in seen_hrefs:
+                            new_results.append(el)
+                    except Exception:
+                        continue
+                process_leads(driver, new_results, entities, seen_hrefs)
 
                 if entities:
                     on_leads_found(entities)
+                    empty_rounds = 0
+                else:
+                    empty_rounds += 1
+                    logger.info("No new leads found (round %d/%d)", empty_rounds, max_empty_rounds)
+                    if empty_rounds >= max_empty_rounds:
+                        logger.info("No more leads after %d rounds, finishing", max_empty_rounds)
+                        break
 
             except Exception:
                 logger.exception("Error during scraping iteration")
+                if entities:
+                    on_leads_found(entities)
 
             try:
                 container = driver.find_element(
@@ -62,6 +84,8 @@ def scrape_maps(search_text: str, stop_event: threading.Event, on_leads_found: c
 
             time.sleep(5)
 
+    except Exception:
+        logger.exception("Scraper crashed for search: %s", search_text)
     finally:
         driver.quit()
         logger.info("Scraper stopped for search: %s", search_text)
