@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 
-from prospect_clients.src.configurations.database import get_db
+from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.utils.security import get_current_user
 from prospect_clients.src.models.schemas.user import UserCreate
 from prospect_clients.src.repositories.user_repository import UserRepository
@@ -10,9 +9,7 @@ from prospect_clients.src.services.user_service import UserService
 
 router = APIRouter(tags=["users"])
 
-
-def _get_service(db: Session = Depends(get_db)) -> UserService:
-    return UserService(UserRepository(db))
+_get_service = service_provider(UserService, UserRepository)
 
 
 @router.post(

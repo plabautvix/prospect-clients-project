@@ -43,3 +43,18 @@ class OperationsRepository:
             self.db.commit()
             self.db.refresh(operation)
         return operation
+
+    def reset_active_operations(self) -> int:
+        """Mark every active operation (status=1) as stopped (status=0).
+
+        Used on backend startup: after an application restart no scraping
+        thread survives, so operations left as active in the database are
+        orphaned and must be reconciled.
+        """
+        updated = (
+            self.db.query(Operations)
+            .filter(Operations.status == 1)
+            .update({Operations.status: 0})
+        )
+        self.db.commit()
+        return updated

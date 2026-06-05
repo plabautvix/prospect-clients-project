@@ -31,3 +31,12 @@ class OperationsService:
         if not operation:
             raise HTTPException(status_code=404, detail="Operacao nao encontrada.")
         return operation
+
+    def reset_orphaned_operations(self) -> int:
+        """Reconcile orphaned active operations on startup.
+
+        After an application restart no scraping thread survives, so every
+        operation with status=1 is actually stopped and must be marked as
+        status=0.
+        """
+        return self.repository.reset_active_operations()

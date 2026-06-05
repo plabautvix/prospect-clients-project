@@ -1,9 +1,8 @@
 from typing import List
 from http import HTTPStatus
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from prospect_clients.src.configurations.database import get_db
+from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.utils.security import get_current_user
 from prospect_clients.src.models.schemas.leads import LeadSchema
 from prospect_clients.src.repositories.leads_repository import LeadsRepository
@@ -11,9 +10,7 @@ from prospect_clients.src.services.leads_service import LeadsService
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
-
-def _get_service(db: Session = Depends(get_db)) -> LeadsService:
-    return LeadsService(LeadsRepository(db))
+_get_service = service_provider(LeadsService, LeadsRepository)
 
 
 @router.get(

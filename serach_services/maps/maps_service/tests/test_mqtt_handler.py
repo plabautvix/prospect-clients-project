@@ -27,6 +27,7 @@ class TestOnMessage:
         msg = MagicMock()
         msg.payload.decode.return_value = json.dumps({
             "status": 1,
+            "id_operation": 7,
             "search_text": "padarias SP",
             "message_user": "Ola {nome}",
             "token": "tok123",
@@ -42,6 +43,7 @@ class TestOnMessage:
             token="tok123",
             user_id=1,
             title="Padarias",
+            operation_id=7,
         )
 
     @patch("messaging.mqtt_handler._operation_service")

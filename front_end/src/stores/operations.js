@@ -28,10 +28,20 @@ export const useOperationsStore = defineStore('operations', () => {
   }
 
   async function stopOperation(id) {
-    await api.put('/automations/operations/maps/deactivate', null, {
-      params: { id_operation: id },
-    })
-    await fetchOperations()
+    // Optimistic update: reflect the stop in the UI immediately.
+    const op = operations.value.find((o) => o.id_operation === id)
+    const previousStatus = op?.status
+    if (op) op.status = 0
+    try {
+      await api.put('/automations/operations/maps/deactivate', null, {
+        params: { id_operation: id },
+      })
+      await fetchOperations()
+    } catch (e) {
+      // Revert the optimistic update if the request fails.
+      if (op && previousStatus !== undefined) op.status = previousStatus
+      throw e
+    }
   }
 
   return { operations, loading, error, fetchOperations, startOperation, stopOperation }

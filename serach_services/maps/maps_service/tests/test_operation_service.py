@@ -100,10 +100,19 @@ class TestOperationService:
         # Thread should have been registered under id 99
         assert 99 not in service._active_operations or True  # thread finishes fast
 
-    def test_stop_nonexistent_operation(self):
+    @patch("services.operation_service.requests")
+    def test_stop_nonexistent_operation(self, mock_requests):
+        # Even without a thread in memory (e.g. maps_service was restarted),
+        # the database must be reconciled to status=0.
+        mock_patch_response = MagicMock()
+        mock_patch_response.status_code = 200
+        mock_requests.patch.return_value = mock_patch_response
+
         service = OperationService()
         # Should not raise
         service.stop_operation(operation_id=999, token="tok")
+
+        mock_requests.patch.assert_called_once()
 
     def test_thread_safety_lock_exists(self):
         service = OperationService()

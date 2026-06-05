@@ -33,9 +33,15 @@ class OperationService:
         stop_event = threading.Event()
         lead_service = LeadService(token=token, message_template=message_text)
 
+        def _run_and_finalize():
+            scrape_maps(search_text, stop_event, lead_service.process_found_leads)
+            with self._lock:
+                self._active_operations.pop(operation_id, None)
+            self._update_operation_status_via_api(token, operation_id, status=0)
+            logger.info("Operation %s finished automatically", operation_id)
+
         thread = threading.Thread(
-            target=scrape_maps,
-            args=(search_text, stop_event, lead_service.process_found_leads),
+            target=_run_and_finalize,
             name=f"scraper-{operation_id}",
             daemon=True,
         )
@@ -54,11 +60,12 @@ class OperationService:
             op = self._active_operations.pop(operation_id, None)
 
         if op is None:
+            # The thread may not exist here (e.g. maps_service was restarted).
+            # We still ensure the database is made consistent as stopped.
             logger.warning("Operation %s not found in active operations", operation_id)
-            return
-
-        op["stop_event"].set()
-        op["thread"].join(timeout=30)
+        else:
+            op["stop_event"].set()
+            op["thread"].join(timeout=30)
 
         self._update_operation_status_via_api(token, operation_id, status=0)
         logger.info("Operation %s stopped", operation_id)

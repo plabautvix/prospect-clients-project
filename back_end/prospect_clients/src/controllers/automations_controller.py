@@ -63,7 +63,14 @@ def send_message_maps_service(
 def send_message_stop_maps_service(
     id_operation: int,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    # Mark as stopped in the database right away so the UI reflects it,
+    # without depending on the async thread teardown in maps_service.
+    # Best-effort: if the operation does not exist, proceed without error (idempotent).
+    OperationsRepository(db).update_status(id_operation, 0)
+
+    # MQTT continua sendo enviado para o maps_service encerrar o scraper de fato.
     AutomationsService().deactivate_maps_scraping(
         id_operation=id_operation,
         user_id=current_user["user_id"],

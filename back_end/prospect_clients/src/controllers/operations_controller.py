@@ -1,8 +1,7 @@
 from http import HTTPStatus
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from prospect_clients.src.configurations.database import get_db
+from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.utils.security import get_current_user
 from prospect_clients.src.models.schemas.operations import (
     OperationCreate,
@@ -14,9 +13,7 @@ from prospect_clients.src.services.operations_service import OperationsService
 
 router = APIRouter(prefix="/operations", tags=["Operations"])
 
-
-def _get_service(db: Session = Depends(get_db)) -> OperationsService:
-    return OperationsService(OperationsRepository(db))
+_get_service = service_provider(OperationsService, OperationsRepository)
 
 
 @router.get(
