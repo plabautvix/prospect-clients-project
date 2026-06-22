@@ -1,8 +1,7 @@
 from http import HTTPStatus
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from prospect_clients.src.configurations.database import get_db
+from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.models.schemas.data_returned_selenium import LeadsResponse
 from prospect_clients.src.models.schemas.operations import OperationCreate, OperationResponse
 from prospect_clients.src.utils.security import get_current_user
@@ -11,6 +10,8 @@ from prospect_clients.src.services.operations_service import OperationsService
 from prospect_clients.src.repositories.operations_repository import OperationsRepository
 
 router = APIRouter()
+
+_get_operations_service = service_provider(OperationsService, OperationsRepository)
 
 
 @router.post(
@@ -28,10 +29,9 @@ def send_message_maps_service(
     message_user: str,
     title: str = None,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    ops_service: OperationsService = Depends(_get_operations_service),
 ):
-    # Cria a operação no banco imediatamente
-    ops_service = OperationsService(OperationsRepository(db))
+    # Create the operation in the database right away
     operation = ops_service.create_operation(
         OperationCreate(
             operation_name=title or serach_text,
@@ -41,7 +41,7 @@ def send_message_maps_service(
         user_id=current_user["user_id"],
     )
 
-    # Publica no MQTT com o ID já criado (maps_service usa, não recria)
+    # Publish to MQTT with the id already created (maps_service uses it, does not recreate)
     AutomationsService().activate_maps_scraping(
         search_text=serach_text,
         message_user=message_user,
@@ -63,14 +63,14 @@ def send_message_maps_service(
 def send_message_stop_maps_service(
     id_operation: int,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    ops_service: OperationsService = Depends(_get_operations_service),
 ):
     # Mark as stopped in the database right away so the UI reflects it,
     # without depending on the async thread teardown in maps_service.
     # Best-effort: if the operation does not exist, proceed without error (idempotent).
-    OperationsRepository(db).update_status(id_operation, 0)
+    ops_service.mark_stopped(id_operation)
 
-    # MQTT continua sendo enviado para o maps_service encerrar o scraper de fato.
+    # MQTT is still published so maps_service actually stops the scraper.
     AutomationsService().deactivate_maps_scraping(
         id_operation=id_operation,
         user_id=current_user["user_id"],

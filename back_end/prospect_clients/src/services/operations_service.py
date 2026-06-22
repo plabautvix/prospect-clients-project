@@ -26,6 +26,15 @@ class OperationsService:
             raise HTTPException(status_code=404, detail="Operacao nao encontrada.")
         return operation
 
+    def mark_stopped(self, operation_id: int):
+        """Mark an operation as stopped (status=0), best-effort.
+
+        Unlike update_status, this does not raise when the operation is
+        missing: stopping an operation must stay idempotent so the UI can
+        reflect the stop without failing on already-gone operations.
+        """
+        return self.repository.update_status(operation_id, 0)
+
     def get_operation(self, operation_id: int):
         operation = self.repository.get_by_id(operation_id)
         if not operation:
