@@ -1,50 +1,128 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useLeadsStore } from '@/stores/leads'
 import { useWhatsappStore } from '@/stores/whatsapp'
 
 const leadsStore = useLeadsStore()
 const waStore = useWhatsappStore()
 
-const search = ref('')
-const selected = ref(new Set())
+// Filtros locais (espelham os campos do servidor), aplicados com debounce
+const localFilters = reactive({ nome: '', categoria: [], telefone: '', endereco: '', site: '' })
+
+// Multiselect de categoria — painel é teleportado para o body para escapar
+// dos stacking contexts dos cards (backdrop-filter cria contexto próprio).
+const categoryOpen = ref(false)
+const categoryBox = ref(null)
+const categoryPanel = ref(null)
+const categorySearchInput = ref(null)
+const categorySearch = ref('')
+const panelStyle = ref({})
+
+const filteredCategories = computed(() => {
+  const q = categorySearch.value.trim().toLowerCase()
+  if (!q) return leadsStore.categories
+  return leadsStore.categories.filter((c) => c.toLowerCase().includes(q))
+})
+
+function toggleCategory(c) {
+  const idx = localFilters.categoria.indexOf(c)
+  if (idx === -1) localFilters.categoria.push(c)
+  else localFilters.categoria.splice(idx, 1)
+}
+
+function updatePanelPosition() {
+  if (!categoryBox.value) return
+  const r = categoryBox.value.getBoundingClientRect()
+  panelStyle.value = {
+    position: 'fixed',
+    top: `${r.bottom + 4}px`,
+    left: `${r.left}px`,
+    width: `${r.width}px`,
+  }
+}
+
+function toggleCategoryDropdown() {
+  categoryOpen.value = !categoryOpen.value
+  if (categoryOpen.value) {
+    categorySearch.value = ''
+    nextTick(() => {
+      updatePanelPosition()
+      categorySearchInput.value?.focus()
+    })
+  }
+}
+
+function onCategoryReposition() {
+  if (categoryOpen.value) updatePanelPosition()
+}
+
+function onClickOutside(e) {
+  const inBox = categoryBox.value && categoryBox.value.contains(e.target)
+  const inPanel = categoryPanel.value && categoryPanel.value.contains(e.target)
+  if (!inBox && !inPanel) categoryOpen.value = false
+}
+
+// Seleção entre páginas: guarda o objeto do lead, não só o id, para que
+// seleções sobrevivam à troca de página (a lista só tem a página atual).
+const selected = ref(new Map())
+
 const messageTemplate = ref('Olá {nome}! Vi seu negócio e gostaria de apresentar uma oportunidade especial.')
 const sending = ref(false)
 const sendResult = ref(null)
 const sendError = ref('')
 
-onMounted(() => leadsStore.fetchLeads())
-
-const filtered = computed(() => {
-  const q = search.value.toLowerCase()
-  if (!q) return leadsStore.leads
-  return leadsStore.leads.filter(l =>
-    l.nome?.toLowerCase().includes(q) ||
-    l.telefone?.includes(q) ||
-    l.categoria?.toLowerCase().includes(q)
-  )
+onMounted(() => {
+  leadsStore.fetchLeads()
+  leadsStore.fetchCategories()
+  document.addEventListener('click', onClickOutside)
+  window.addEventListener('scroll', onCategoryReposition, true)
+  window.addEventListener('resize', onCategoryReposition)
 })
 
+// Debounce dos filtros
+let debounceTimer = null
+watch(
+  localFilters,
+  () => {
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(
+      () => leadsStore.setFilters({ ...localFilters, categoria: [...localFilters.categoria] }),
+      300
+    )
+  },
+  { deep: true }
+)
+onUnmounted(() => {
+  clearTimeout(debounceTimer)
+  document.removeEventListener('click', onClickOutside)
+  window.removeEventListener('scroll', onCategoryReposition, true)
+  window.removeEventListener('resize', onCategoryReposition)
+})
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(leadsStore.total / leadsStore.pageSize))
+)
+
 const allSelected = computed(
-  () => filtered.value.length > 0 && filtered.value.every(l => selected.value.has(l.id_lead))
+  () =>
+    leadsStore.leads.length > 0 &&
+    leadsStore.leads.every((l) => selected.value.has(l.id_lead))
 )
 
 function toggleAll() {
   if (allSelected.value) {
-    filtered.value.forEach(l => selected.value.delete(l.id_lead))
+    leadsStore.leads.forEach((l) => selected.value.delete(l.id_lead))
   } else {
-    filtered.value.forEach(l => selected.value.add(l.id_lead))
+    leadsStore.leads.forEach((l) => selected.value.set(l.id_lead, l))
   }
 }
 
-function toggle(id) {
-  if (selected.value.has(id)) selected.value.delete(id)
-  else selected.value.add(id)
+function toggle(lead) {
+  if (selected.value.has(lead.id_lead)) selected.value.delete(lead.id_lead)
+  else selected.value.set(lead.id_lead, lead)
 }
 
-const selectedLeads = computed(() =>
-  leadsStore.leads.filter(l => selected.value.has(l.id_lead))
-)
+const selectedLeads = computed(() => Array.from(selected.value.values()))
 
 async function sendBatch() {
   if (selected.value.size === 0) return
@@ -57,7 +135,7 @@ async function sendBatch() {
   sendError.value = ''
   sendResult.value = null
   try {
-    const leadsWithPhone = selectedLeads.value.filter(l => l.telefone)
+    const leadsWithPhone = selectedLeads.value.filter((l) => l.telefone)
     if (leadsWithPhone.length === 0) {
       sendError.value = 'Nenhum lead selecionado tem telefone cadastrado.'
       return
@@ -78,7 +156,7 @@ async function sendBatch() {
     <div class="flex items-start justify-between">
       <div>
         <h1 class="text-2xl font-extrabold text-txt-primary">Leads</h1>
-        <p class="mt-1 text-sm text-txt-secondary">{{ leadsStore.leads.length }} leads coletados.</p>
+        <p class="mt-1 text-sm text-txt-secondary">{{ leadsStore.total }} leads coletados.</p>
       </div>
       <button @click="leadsStore.fetchLeads()" class="btn-secondary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,23 +194,121 @@ async function sendBatch() {
             </svg>
             {{ sending ? 'Enviando…' : 'Enviar via WhatsApp' }}
           </button>
-          <button @click="selected.clear()" class="btn-secondary">Cancelar</button>
+          <button @click="selected.clear()" class="btn-secondary">Cancelar seleção</button>
         </div>
       </div>
     </div>
 
-    <!-- Busca -->
-    <div class="relative">
-      <svg class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-txt-secondary/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <input v-model="search" type="text" placeholder="Buscar por nome, telefone ou categoria…" class="input pl-10" />
+    <!-- Filtros -->
+    <div class="card">
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <label class="label">Nome</label>
+          <input v-model="localFilters.nome" type="text" placeholder="Buscar por nome…" class="input" />
+        </div>
+        <div ref="categoryBox" class="relative">
+          <label class="label">Categoria</label>
+          <button
+            type="button"
+            class="input flex w-full items-center justify-between text-left"
+            @click="toggleCategoryDropdown"
+          >
+            <span v-if="localFilters.categoria.length === 0" class="text-txt-secondary/50">
+              Selecionar categorias…
+            </span>
+            <span v-else class="truncate text-txt-primary">
+              {{ localFilters.categoria.length }} selecionada(s)
+            </span>
+            <svg class="h-4 w-4 shrink-0 text-txt-secondary/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <!-- Dropdown (teleportado para o body) -->
+          <Teleport to="body">
+            <div
+              v-if="categoryOpen"
+              ref="categoryPanel"
+              :style="panelStyle"
+              class="z-[100] flex max-h-72 flex-col rounded-xl border border-brd-light bg-surface shadow-lg"
+            >
+              <!-- Busca dentro do dropdown -->
+              <div class="border-b border-brd-light p-2">
+                <input
+                  ref="categorySearchInput"
+                  v-model="categorySearch"
+                  type="text"
+                  placeholder="Digite para filtrar…"
+                  class="input py-1.5 text-sm"
+                  @keydown.enter.prevent="filteredCategories.length && toggleCategory(filteredCategories[0])"
+                />
+              </div>
+
+              <div class="overflow-auto py-1">
+                <p v-if="leadsStore.categories.length === 0" class="px-3 py-2 text-xs text-txt-secondary/50">
+                  Nenhuma categoria disponível.
+                </p>
+                <p v-else-if="filteredCategories.length === 0" class="px-3 py-2 text-xs text-txt-secondary/50">
+                  Nenhuma categoria corresponde a “{{ categorySearch }}”.
+                </p>
+                <button
+                  v-for="c in filteredCategories"
+                  :key="c"
+                  type="button"
+                  @click="toggleCategory(c)"
+                  :class="[
+                    'flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors',
+                    localFilters.categoria.includes(c)
+                      ? 'bg-brand/10 text-brand font-medium'
+                      : 'text-txt-primary hover:bg-surface-hover',
+                  ]"
+                >
+                  {{ c }}
+                  <svg
+                    v-if="localFilters.categoria.includes(c)"
+                    class="h-4 w-4 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </Teleport>
+
+          <!-- Chips selecionadas -->
+          <div v-if="localFilters.categoria.length > 0" class="mt-2 flex flex-wrap gap-1.5">
+            <span
+              v-for="c in localFilters.categoria"
+              :key="c"
+              class="inline-flex items-center gap-1 rounded-full bg-brand/15 px-2.5 py-0.5 text-xs text-brand"
+            >
+              {{ c }}
+              <button type="button" class="hover:text-brand-hover" @click="toggleCategory(c)">✕</button>
+            </span>
+          </div>
+        </div>
+        <div>
+          <label class="label">Telefone</label>
+          <input v-model="localFilters.telefone" type="text" placeholder="Buscar por telefone…" class="input" />
+        </div>
+        <div>
+          <label class="label">Endereço</label>
+          <input v-model="localFilters.endereco" type="text" placeholder="Buscar por endereço…" class="input" />
+        </div>
+        <div>
+          <label class="label">Site</label>
+          <input v-model="localFilters.site" type="text" placeholder="Buscar por site…" class="input" />
+        </div>
+      </div>
     </div>
 
     <!-- Tabela -->
     <div class="card overflow-hidden p-0">
       <div v-if="leadsStore.loading" class="py-16 text-center text-sm text-txt-secondary/50">Carregando…</div>
-      <div v-else-if="filtered.length === 0" class="py-16 text-center">
+      <div v-else-if="leadsStore.leads.length === 0" class="py-16 text-center">
         <svg class="mx-auto h-10 w-10 text-txt-secondary/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
@@ -154,13 +330,13 @@ async function sendBatch() {
           </thead>
           <tbody class="divide-y divide-brd-light">
             <tr
-              v-for="lead in filtered"
+              v-for="lead in leadsStore.leads"
               :key="lead.id_lead"
               :class="['transition-colors cursor-pointer', selected.has(lead.id_lead) ? 'bg-brand/5' : 'hover:bg-surface-hover']"
-              @click="toggle(lead.id_lead)"
+              @click="toggle(lead)"
             >
               <td class="px-4 py-3" @click.stop>
-                <input type="checkbox" :checked="selected.has(lead.id_lead)" @change="toggle(lead.id_lead)" class="rounded border-brd-light bg-surface text-brand focus:ring-brand/30" />
+                <input type="checkbox" :checked="selected.has(lead.id_lead)" @change="toggle(lead)" class="rounded border-brd-light bg-surface text-brand focus:ring-brand/30" />
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2.5">
@@ -190,6 +366,32 @@ async function sendBatch() {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Paginação -->
+      <div
+        v-if="!leadsStore.loading && leadsStore.total > 0"
+        class="flex items-center justify-between border-t border-brd-light px-4 py-3"
+      >
+        <p class="text-xs text-txt-secondary/60">
+          Página {{ leadsStore.page }} de {{ totalPages }} · {{ leadsStore.total }} leads
+        </p>
+        <div class="flex gap-2">
+          <button
+            class="btn-secondary text-xs"
+            :disabled="leadsStore.page <= 1"
+            @click="leadsStore.setPage(leadsStore.page - 1)"
+          >
+            Anterior
+          </button>
+          <button
+            class="btn-secondary text-xs"
+            :disabled="leadsStore.page >= totalPages"
+            @click="leadsStore.setPage(leadsStore.page + 1)"
+          >
+            Próxima
+          </button>
+        </div>
       </div>
     </div>
   </div>
