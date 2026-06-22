@@ -1,7 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-
-from sqlalchemy import Integer
+from typing import List, Optional
 
 
 class LeadSchema(BaseModel):
@@ -24,3 +22,16 @@ class LeadSchema(BaseModel):
             }
         }
     }
+
+
+class LeadResponse(LeadSchema):
+    id_lead: int = Field(..., description="The primary key of the lead.")
+
+    model_config = {"from_attributes": True}
+
+
+class LeadsPage(BaseModel):
+    items: List[LeadResponse] = Field(..., description="Leads in the current page.")
+    total: int = Field(..., description="Total number of leads matching the filters.")
+    skip: int = Field(..., description="Number of leads skipped (offset).")
+    limit: int = Field(..., description="Maximum number of leads per page.")
