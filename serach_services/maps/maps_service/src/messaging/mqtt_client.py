@@ -16,6 +16,9 @@ def create_mqtt_client() -> mqtt.Client:
     client.on_subscribe = on_subscribe
     client.on_message = on_message
 
+    if settings.MQTT_USERNAME:
+        client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
+
     client.connect(settings.MQTT_HOST, settings.MQTT_PORT, settings.MQTT_KEEPALIVE)
     logger.info("MQTT client connecting to %s:%s", settings.MQTT_HOST, settings.MQTT_PORT)
     return client

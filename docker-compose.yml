@@ -6,17 +6,25 @@ services:
     image: eclipse-mosquitto:2
     ports:
       - "1883:1883"
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    # Build the password file from env on startup, then run the broker.
+    command:
+      - sh
+      - -c
+      - mosquitto_passwd -b -c /mosquitto/config/passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD" && exec mosquitto -c /mosquitto/config/mosquitto.conf
 
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
-      - "15672:15672"   # management UI at http://localhost:15672 (guest/guest)
+      - "15672:15672"   # management UI at http://localhost:15672
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-prospect}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -32,6 +40,8 @@ services:
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
       # Override JWT_SECRET in real deployments (e.g. via .env / secrets manager).
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-720}
@@ -49,10 +59,12 @@ services:
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
+      RABBITMQ_USER: ${RABBITMQ_USER:-prospect}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
       RABBITMQ_EXCHANGE: fila_mensagens
       RABBITMQ_ROUTING_KEY: enviar
       BACKEND_API_URL: http://backend:8000

@@ -12,6 +12,8 @@ class Settings:
         self.MQTT_CLIENT_NAME: str = os.getenv("MQTT_CLIENT_NAME", "maps_service_client")
         self.MQTT_KEEPALIVE: int = int(os.getenv("MQTT_KEEPALIVE", "60"))
         self.MQTT_TOPIC: str = os.getenv("MQTT_TOPIC", "prospect/maps")
+        self.MQTT_USERNAME: str = os.getenv("MQTT_USERNAME", "")
+        self.MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD", "")
 
         # RabbitMQ
         self.RABBITMQ_HOST: str = os.getenv("RABBITMQ_HOST", "localhost")
