@@ -32,6 +32,9 @@ services:
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
+      # Override JWT_SECRET in real deployments (e.g. via .env / secrets manager).
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-720}
     volumes:
       - ./back_end:/app
     depends_on:

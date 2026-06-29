@@ -1,12 +1,16 @@
+from datetime import datetime, timedelta, timezone
+
 import bcrypt
 import jwt
 from fastapi import HTTPException
 
+from prospect_clients.src.configurations.auth import (
+    JWT_ALGORITHM,
+    JWT_EXPIRATION_MINUTES,
+    JWT_SECRET,
+)
 from prospect_clients.src.repositories.user_repository import UserRepository
 from prospect_clients.src.models.schemas.user import UserCreate
-
-JWT_SECRET = "euvouvencer"
-JWT_ALGORITHM = "HS256"
 
 
 class UserService:
@@ -30,8 +34,11 @@ class UserService:
         if not bcrypt.checkpw(password.encode("utf-8"), user.hashed_password.encode("utf-8")):
             raise HTTPException(status_code=400, detail="Senha incorreta.")
 
+        expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRATION_MINUTES)
         token = jwt.encode(
-            {"user_id": user.id_person}, JWT_SECRET, algorithm=JWT_ALGORITHM
+            {"user_id": user.id_person, "exp": expire},
+            JWT_SECRET,
+            algorithm=JWT_ALGORITHM,
         )
 
         return {"access_token": token, "token_type": "bearer"}

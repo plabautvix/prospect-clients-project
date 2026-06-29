@@ -52,6 +52,18 @@ class TestUserService:
         assert "access_token" in result
         assert result["token_type"] == "bearer"
 
+    def test_token_has_expiration(self, db):
+        import jwt
+        from prospect_clients.src.configurations.auth import JWT_ALGORITHM, JWT_SECRET
+        from prospect_clients.src.models.schemas.user import UserCreate
+
+        service = UserService(UserRepository(db))
+        service.register(UserCreate(email="exp@test.com", password="pass"))
+        token = service.authenticate("exp@test.com", "pass")["access_token"]
+
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        assert "exp" in payload
+
     def test_authenticate_wrong_password(self, db):
         service = UserService(UserRepository(db))
         from prospect_clients.src.models.schemas.user import UserCreate
@@ -125,3 +137,24 @@ class TestUserEndpoints:
             data={"username": "fail@test.com", "password": "wrong"},
         )
         assert response.status_code == 400
+
+    def test_userme_invalid_token_returns_401(self, client):
+        response = client.get(
+            "/users/userme", headers={"Authorization": "Bearer not-a-valid-token"}
+        )
+        assert response.status_code == 401
+
+    def test_userme_expired_token_returns_401(self, client):
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        from prospect_clients.src.configurations.auth import JWT_ALGORITHM, JWT_SECRET
+
+        expired = jwt.encode(
+            {"user_id": 1, "exp": datetime.now(timezone.utc) - timedelta(minutes=1)},
+            JWT_SECRET,
+            algorithm=JWT_ALGORITHM,
+        )
+        response = client.get(
+            "/users/userme", headers={"Authorization": f"Bearer {expired}"}
+        )
+        assert response.status_code == 401
