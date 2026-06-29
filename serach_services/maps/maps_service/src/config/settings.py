@@ -23,6 +23,8 @@ class Settings:
 
         # Backend API
         self.BACKEND_API_URL: str = os.getenv("BACKEND_API_URL", "http://localhost:8000")
+        # Service-to-service credential used to call the backend (X-Service-Key).
+        self.SERVICE_API_KEY: str = os.getenv("SERVICE_API_KEY", "dev-service-key-change-me")
 
         # Firefox / Selenium
         self.FIREFOX_BINARY_PATH: str = os.getenv("FIREFOX_BINARY_PATH", "")

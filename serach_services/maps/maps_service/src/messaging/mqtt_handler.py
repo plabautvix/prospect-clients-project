@@ -32,7 +32,6 @@ def on_message(client, userdata, msg):
             _operation_service.start_operation(
                 search_text=payload.get("search_text"),
                 message_text=payload.get("message_user"),
-                token=payload.get("token"),
                 user_id=payload.get("user_id"),
                 title=payload.get("title"),
                 operation_id=payload.get("id_operation"),
@@ -40,7 +39,6 @@ def on_message(client, userdata, msg):
         else:
             _operation_service.stop_operation(
                 operation_id=payload.get("id_operation"),
-                token=payload.get("token"),
             )
     except Exception:
         logger.exception("Error processing MQTT message")

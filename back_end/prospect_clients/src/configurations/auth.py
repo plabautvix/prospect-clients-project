@@ -15,7 +15,11 @@ load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-insecure-change-me")
 JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
 
-# Token lifetime. Kept generous for now because the user token is still propagated
-# to and reused by the maps-service (see ARCHITECTURE.md, roadmap item 2). Once
-# service identities replace that propagation, this should drop to ~15-60 minutes.
+# Token lifetime. The user token is no longer propagated to internal services
+# (they authenticate with SERVICE_API_KEY), so this can be tightened.
 JWT_EXPIRATION_MINUTES: int = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))
+
+# Shared secret for service-to-service authentication (maps-service -> backend),
+# kept separate from user JWTs so services have their own identity and can be
+# rotated/revoked independently. MUST be set via environment in real deployments.
+SERVICE_API_KEY: str = os.getenv("SERVICE_API_KEY", "dev-service-key-change-me")

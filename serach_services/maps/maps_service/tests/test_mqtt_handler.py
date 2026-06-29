@@ -30,7 +30,6 @@ class TestOnMessage:
             "id_operation": 7,
             "search_text": "padarias SP",
             "message_user": "Ola {nome}",
-            "token": "tok123",
             "user_id": 1,
             "title": "Padarias",
         })
@@ -40,7 +39,6 @@ class TestOnMessage:
         mock_service.start_operation.assert_called_once_with(
             search_text="padarias SP",
             message_text="Ola {nome}",
-            token="tok123",
             user_id=1,
             title="Padarias",
             operation_id=7,
@@ -52,14 +50,12 @@ class TestOnMessage:
         msg.payload.decode.return_value = json.dumps({
             "status": 0,
             "id_operation": 42,
-            "token": "tok123",
         })
 
         on_message(None, None, msg)
 
         mock_service.stop_operation.assert_called_once_with(
             operation_id=42,
-            token="tok123",
         )
 
     @patch("messaging.mqtt_handler._operation_service")

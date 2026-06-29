@@ -108,43 +108,57 @@ class TestLeadsService:
 
 
 class TestLeadsEndpoints:
-    def _get_token(self, client):
-        client.post("/users/", json={"email": "leads@test.com", "password": "pass"})
-        login = client.post(
-            "/users/login",
-            data={"username": "leads@test.com", "password": "pass"},
-        )
-        return login.json()["access_token"]
+    def _seed(self, client, db, email, leads):
+        """Create a user, log in, seed leads via the service endpoint; return token."""
+        from prospect_clients.src.configurations.auth import SERVICE_API_KEY
+        from prospect_clients.src.repositories.user_repository import UserRepository
 
-    def test_create_leads_endpoint(self, client):
-        token = self._get_token(client)
+        client.post("/users/", json={"email": email, "password": "pass"})
+        token = client.post(
+            "/users/login", data={"username": email, "password": "pass"}
+        ).json()["access_token"]
+        user = UserRepository(db).get_by_email(email)
+        if leads:
+            client.post(
+                f"/leads/?user_id={user.id_person}",
+                json=leads,
+                headers={"X-Service-Key": SERVICE_API_KEY},
+            )
+        return token
+
+    def test_create_leads_endpoint(self, client, db):
+        # POST /leads is now a service-to-service endpoint: X-Service-Key + user_id.
+        from prospect_clients.src.configurations.auth import SERVICE_API_KEY
+        from prospect_clients.src.repositories.user_repository import UserRepository
+
+        user = UserRepository(db).create(email="leadsvc@test.com", hashed_password="h")
         response = client.post(
-            "/leads/",
+            f"/leads/?user_id={user.id_person}",
             json=[
                 {"nome": "Endpoint Lead", "telefone": "999"},
                 {"nome": "Endpoint Lead 2", "telefone": "888"},
             ],
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"X-Service-Key": SERVICE_API_KEY},
         )
         assert response.status_code == 201
         data = response.json()
         assert len(data) == 2
 
-    def test_create_leads_unauthenticated(self, client):
-        response = client.post("/leads/", json=[{"nome": "No Auth"}])
-        assert response.status_code in (401, 403)
+    def test_create_leads_without_service_key(self, client):
+        response = client.post("/leads/?user_id=1", json=[{"nome": "No Auth"}])
+        assert response.status_code == 401
 
-    def test_list_leads_paginated_shape(self, client):
-        token = self._get_token(client)
-        headers = {"Authorization": f"Bearer {token}"}
-        client.post(
-            "/leads/",
-            json=[
+    def test_list_leads_paginated_shape(self, client, db):
+        token = self._seed(
+            client,
+            db,
+            "page@test.com",
+            [
                 {"nome": "Page Lead 1", "telefone": "1", "categoria": "padaria"},
                 {"nome": "Page Lead 2", "telefone": "2", "categoria": "barbearia"},
             ],
-            headers=headers,
         )
+        headers = {"Authorization": f"Bearer {token}"}
 
         response = client.get("/leads/", params={"skip": 0, "limit": 1}, headers=headers)
         assert response.status_code == 200
@@ -155,17 +169,17 @@ class TestLeadsEndpoints:
         assert len(data["items"]) == 1
         assert "id_lead" in data["items"][0]
 
-    def test_list_leads_filter(self, client):
-        token = self._get_token(client)
-        headers = {"Authorization": f"Bearer {token}"}
-        client.post(
-            "/leads/",
-            json=[
+    def test_list_leads_filter(self, client, db):
+        token = self._seed(
+            client,
+            db,
+            "filter@test.com",
+            [
                 {"nome": "Filtro Padaria", "categoria": "padaria"},
                 {"nome": "Filtro Barbearia", "categoria": "barbearia"},
             ],
-            headers=headers,
         )
+        headers = {"Authorization": f"Bearer {token}"}
 
         response = client.get("/leads/", params={"categoria": "padaria"}, headers=headers)
         assert response.status_code == 200
@@ -173,19 +187,19 @@ class TestLeadsEndpoints:
         assert data["total"] == 1
         assert data["items"][0]["nome"] == "Filtro Padaria"
 
-    def test_list_categories(self, client):
-        token = self._get_token(client)
-        headers = {"Authorization": f"Bearer {token}"}
-        client.post(
-            "/leads/",
-            json=[
+    def test_list_categories(self, client, db):
+        token = self._seed(
+            client,
+            db,
+            "cat@test.com",
+            [
                 {"nome": "Cat Lead 1", "categoria": "padaria"},
                 {"nome": "Cat Lead 2", "categoria": "barbearia"},
                 {"nome": "Cat Lead 3", "categoria": "padaria"},
                 {"nome": "Cat Lead 4", "categoria": None},
             ],
-            headers=headers,
         )
+        headers = {"Authorization": f"Bearer {token}"}
 
         response = client.get("/leads/categories", headers=headers)
         assert response.status_code == 200

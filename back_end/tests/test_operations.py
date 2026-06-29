@@ -98,10 +98,13 @@ class TestOperationsEndpoints:
         )
         op_id = create.json()["id_operation"]
 
+        # PATCH status is now service-only (X-Service-Key).
+        from prospect_clients.src.configurations.auth import SERVICE_API_KEY
+
         response = client.patch(
             f"/operations/{op_id}/status",
             json={"status": 0},
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"X-Service-Key": SERVICE_API_KEY},
         )
         assert response.status_code == 200
         assert response.json()["status"] == 0

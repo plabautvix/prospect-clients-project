@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class LeadService:
-    def __init__(self, token: str, message_template: str):
-        self._token = token
+    def __init__(self, user_id: int, message_template: str):
+        self._user_id = user_id
         self._message_template = message_template
         self._publisher = RabbitMQPublisher()
 
@@ -24,11 +24,13 @@ class LeadService:
     def _send_leads_to_api(self, leads: list[dict]):
         url = f"{settings.BACKEND_API_URL}/leads/"
         headers = {
-            "Authorization": f"Bearer {self._token}",
+            "X-Service-Key": settings.SERVICE_API_KEY,
             "Content-Type": "application/json",
         }
         try:
-            response = requests.post(url, json=leads, headers=headers)
+            response = requests.post(
+                url, json=leads, params={"user_id": self._user_id}, headers=headers
+            )
             if response.status_code == 201:
                 logger.info("Leads inserted successfully (%d leads)", len(leads))
             else:

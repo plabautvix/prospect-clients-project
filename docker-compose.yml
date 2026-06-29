@@ -35,6 +35,8 @@ services:
       # Override JWT_SECRET in real deployments (e.g. via .env / secrets manager).
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-720}
+      # Shared service credential validated by the backend (X-Service-Key).
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
     volumes:
       - ./back_end:/app
     depends_on:
@@ -54,6 +56,7 @@ services:
       RABBITMQ_EXCHANGE: fila_mensagens
       RABBITMQ_ROUTING_KEY: enviar
       BACKEND_API_URL: http://backend:8000
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
       SELENIUM_HEADLESS: "true"
     volumes:
       - ./serach_services/maps/maps_service/src:/app/src

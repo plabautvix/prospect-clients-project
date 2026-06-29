@@ -3,7 +3,7 @@ from http import HTTPStatus
 from fastapi import APIRouter, Depends, Query
 
 from prospect_clients.src.configurations.dependencies import service_provider
-from prospect_clients.src.utils.security import get_current_user
+from prospect_clients.src.utils.security import get_current_user, require_service
 from prospect_clients.src.models.schemas.leads import LeadSchema, LeadsPage
 from prospect_clients.src.repositories.leads_repository import LeadsRepository
 from prospect_clients.src.services.leads_service import LeadsService
@@ -56,13 +56,15 @@ def list_categories(
 @router.post(
     "/",
     status_code=HTTPStatus.CREATED,
-    summary="Register multiple leads",
-    description="Register multiple leads in the database, ignoring duplicates based"
-    " on the 'nome' field. and create user lead history entries.",
+    summary="Register multiple leads (service only)",
+    description="Service-to-service endpoint used by the maps-service to ingest"
+    " collected leads. Requires the X-Service-Key header; the target user is"
+    " provided via the user_id query parameter.",
 )
 def create_leads(
     leads: List[LeadSchema],
+    user_id: int,
     service: LeadsService = Depends(_get_service),
-    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(require_service),
 ):
-    return service.register_leads(leads, current_user["user_id"])
+    return service.register_leads(leads, user_id)

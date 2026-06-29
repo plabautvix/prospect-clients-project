@@ -11,7 +11,6 @@ class TestAutomationsService:
             search_text="pizzarias SP",
             message_user="Ola!",
             user_id=1,
-            token="tok123",
             id_operation=7,
             title="Pizzarias",
         )
@@ -21,25 +20,25 @@ class TestAutomationsService:
         assert payload["status"] == 1
         assert payload["id_operation"] == 7
         assert payload["search_text"] == "pizzarias SP"
+        # The user token must NOT be propagated to the maps-service.
+        assert "token" not in payload
 
     @patch("prospect_clients.src.services.automations_service.publish_message")
     def test_deactivate_maps_scraping(self, mock_publish):
         service = AutomationsService()
-        result = service.deactivate_maps_scraping(
-            id_operation=42, user_id=1, token="tok123"
-        )
+        result = service.deactivate_maps_scraping(id_operation=42, user_id=1)
 
         assert result == {"message": "Scraping process stopped"}
         mock_publish.assert_called_once_with(
             "prospect/maps",
-            {"status": 0, "id_operation": 42, "user_id": 1, "token": "tok123"},
+            {"status": 0, "id_operation": 42, "user_id": 1},
         )
 
     @patch("prospect_clients.src.services.automations_service.publish_message")
     def test_activate_without_title(self, mock_publish):
         service = AutomationsService()
         service.activate_maps_scraping(
-            search_text="lojas", message_user="Oi", user_id=2, token="t", id_operation=1
+            search_text="lojas", message_user="Oi", user_id=2, id_operation=1
         )
         assert mock_publish.call_args[0][1]["title"] is None
 

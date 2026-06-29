@@ -19,9 +19,11 @@ def _get_firefox_options() -> Options:
 
 class AutomationsService:
     def activate_maps_scraping(
-        self, search_text: str, message_user: str, user_id: int, token: str,
+        self, search_text: str, message_user: str, user_id: int,
         id_operation: int, title: str | None = None,
     ) -> dict:
+        # No user token is sent: the maps-service authenticates to the backend
+        # with its own service credential (X-Service-Key).
         publish_message(
             "prospect/maps",
             {
@@ -30,14 +32,13 @@ class AutomationsService:
                 "search_text": search_text,
                 "title": title,
                 "user_id": user_id,
-                "token": token,
                 "message_user": message_user,
             },
         )
         return {"message": "Scraping process started"}
 
     def deactivate_maps_scraping(
-        self, id_operation: int, user_id: int, token: str,
+        self, id_operation: int, user_id: int,
     ) -> dict:
         publish_message(
             "prospect/maps",
@@ -45,7 +46,6 @@ class AutomationsService:
                 "status": 0,
                 "id_operation": id_operation,
                 "user_id": user_id,
-                "token": token,
             },
         )
         return {"message": "Scraping process stopped"}

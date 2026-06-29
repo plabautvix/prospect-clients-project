@@ -46,7 +46,6 @@ def send_message_maps_service(
         search_text=serach_text,
         message_user=message_user,
         user_id=current_user["user_id"],
-        token=current_user["token"],
         id_operation=operation.id_operation,
         title=title,
     )
@@ -74,7 +73,6 @@ def send_message_stop_maps_service(
     AutomationsService().deactivate_maps_scraping(
         id_operation=id_operation,
         user_id=current_user["user_id"],
-        token=current_user["token"],
     )
     return {"message": "Scraping process stopped"}
 

@@ -2,7 +2,7 @@ from http import HTTPStatus
 from fastapi import APIRouter, Depends
 
 from prospect_clients.src.configurations.dependencies import service_provider
-from prospect_clients.src.utils.security import get_current_user
+from prospect_clients.src.utils.security import get_current_user, require_service
 from prospect_clients.src.models.schemas.operations import (
     OperationCreate,
     OperationResponse,
@@ -45,13 +45,13 @@ def create_operation(
 @router.patch(
     "/{operation_id}/status",
     response_model=OperationResponse,
-    summary="Update operation status",
+    summary="Update operation status (service only)",
 )
 def update_operation_status(
     operation_id: int,
     data: OperationStatusUpdate,
-    current_user: dict = Depends(get_current_user),
     service: OperationsService = Depends(_get_service),
+    _: bool = Depends(require_service),
 ):
     return service.update_status(operation_id, data.status)
 

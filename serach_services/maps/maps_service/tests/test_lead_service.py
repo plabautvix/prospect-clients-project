@@ -11,7 +11,7 @@ class TestLeadService:
         mock_response.status_code = 201
         mock_requests.post.return_value = mock_response
 
-        service = LeadService(token="tok123", message_template="Oi {nome}")
+        service = LeadService(user_id=5, message_template="Oi {nome}")
         leads = [{"nome": "Lead A", "telefone": "+55111"}]
 
         service.process_found_leads(leads)
@@ -19,7 +19,9 @@ class TestLeadService:
         mock_requests.post.assert_called_once()
         call_args = mock_requests.post.call_args
         assert call_args[1]["json"] == leads
-        assert "Bearer tok123" in call_args[1]["headers"]["Authorization"]
+        # Authenticates with the service key, not a user token; user_id is passed along.
+        assert "X-Service-Key" in call_args[1]["headers"]
+        assert call_args[1]["params"] == {"user_id": 5}
 
     @patch("services.lead_service.RabbitMQPublisher")
     @patch("services.lead_service.requests")
@@ -31,7 +33,7 @@ class TestLeadService:
         mock_publisher = MagicMock()
         mock_rmq_cls.return_value = mock_publisher
 
-        service = LeadService(token="tok", message_template="Ola {nome}")
+        service = LeadService(user_id=1, message_template="Ola {nome}")
         leads = [{"nome": "Lead B", "telefone": "+55222"}]
 
         service.process_found_leads(leads)
@@ -51,7 +53,7 @@ class TestLeadService:
         mock_publisher = MagicMock()
         mock_rmq_cls.return_value = mock_publisher
 
-        service = LeadService(token="tok", message_template="Oi {nome}")
+        service = LeadService(user_id=1, message_template="Oi {nome}")
         leads = [{"nome": "No Phone", "telefone": None}]
 
         service.process_found_leads(leads)
@@ -68,7 +70,7 @@ class TestLeadService:
         mock_requests.post.side_effect = ConnectionError("Connection refused")
         mock_requests.RequestException = Exception
 
-        service = LeadService(token="tok", message_template="Oi {nome}")
+        service = LeadService(user_id=1, message_template="Oi {nome}")
         leads = [{"nome": "Test", "telefone": "+55333"}]
 
         # Should not raise
