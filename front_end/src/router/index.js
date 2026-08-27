@@ -30,7 +30,7 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  // Âncoras da landing (#recursos, #planos…) rolam suave; o resto volta ao topo.
+  // Âncoras da landing (#recursos, #faq...) rolam suave; o resto volta ao topo.
   scrollBehavior(to, from, savedPosition) {
     if (to.hash) return { el: to.hash, behavior: 'smooth' }
     return savedPosition ?? { top: 0 }
