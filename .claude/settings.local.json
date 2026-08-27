@@ -12,7 +12,18 @@
       "Bash(python -m pytest tests/ -q)",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
-      "Bash(python -m pytest tests/test_operation_service.py -v)"
+      "Bash(python -m pytest tests/test_operation_service.py -v)",
+      "Bash(python -m pytest tests/test_automations.py tests/test_operations.py -q)",
+      "Bash(python -m pytest tests/test_operation_service.py -q)",
+      "Bash(python -m pytest -q)",
+      "Bash(python -m pytest tests/test_mqtt_handler.py::TestOnMessage::test_start_operation -q)",
+      "Bash(git add *)",
+      "Bash(git commit -m '@ *)",
+      "Bash(git rm *)",
+      "Bash(git commit --amend -m 'feat\\(auth\\): externalize JWT secret to env and add token expiration *)",
+      "Bash(bash scripts/gen-certs.sh)",
+      "Bash(openssl x509 *)",
+      "Bash(openssl verify *)"
     ]
   }
 }
