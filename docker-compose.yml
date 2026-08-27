@@ -102,36 +102,9 @@ services:
       backend:
         condition: service_started
 
-  whatsapp:
-    build: ./whatsapp_services
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./whatsapp_services:/app
-      - /app/node_modules
-      - whatsapp_auth:/app/.wwebjs_auth
-      - ./certs/ca.crt:/certs/ca.crt:ro
-    environment:
-      PORT: 3001
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5671
-      RABBITMQ_USER: ${RABBITMQ_USER:-prospect}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
-      RABBITMQ_TLS: "true"
-      RABBITMQ_CA_CERT: /certs/ca.crt
-      RABBITMQ_EXCHANGE: fila_mensagens
-      RABBITMQ_ROUTING_KEY: enviar
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
   frontend:
     build: ./front_end
     ports:
       - "80:80"
     depends_on:
       - backend
-      - whatsapp
-
-volumes:
-  whatsapp_auth:

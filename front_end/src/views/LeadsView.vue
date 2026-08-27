@@ -1,10 +1,8 @@
 <script setup>
 import { ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useLeadsStore } from '@/stores/leads'
-import { useWhatsappStore } from '@/stores/whatsapp'
 
 const leadsStore = useLeadsStore()
-const waStore = useWhatsappStore()
 
 // Filtros locais (espelham os campos do servidor), aplicados com debounce
 const localFilters = reactive({ nome: '', categoria: [], telefone: '', endereco: '', site: '' })
@@ -66,11 +64,6 @@ function onClickOutside(e) {
 // seleções sobrevivam à troca de página (a lista só tem a página atual).
 const selected = ref(new Map())
 
-const messageTemplate = ref('Olá {nome}! Vi seu negócio e gostaria de apresentar uma oportunidade especial.')
-const sending = ref(false)
-const sendResult = ref(null)
-const sendError = ref('')
-
 onMounted(() => {
   leadsStore.fetchLeads()
   leadsStore.fetchCategories()
@@ -122,33 +115,6 @@ function toggle(lead) {
   else selected.value.set(lead.id_lead, lead)
 }
 
-const selectedLeads = computed(() => Array.from(selected.value.values()))
-
-async function sendBatch() {
-  if (selected.value.size === 0) return
-  if (!messageTemplate.value.trim()) return
-  if (!waStore.isReady) {
-    sendError.value = 'WhatsApp não está conectado. Vá para a aba WhatsApp.'
-    return
-  }
-  sending.value = true
-  sendError.value = ''
-  sendResult.value = null
-  try {
-    const leadsWithPhone = selectedLeads.value.filter((l) => l.telefone)
-    if (leadsWithPhone.length === 0) {
-      sendError.value = 'Nenhum lead selecionado tem telefone cadastrado.'
-      return
-    }
-    const result = await waStore.sendBatch(leadsWithPhone, messageTemplate.value)
-    sendResult.value = result
-    selected.value.clear()
-  } catch (e) {
-    sendError.value = e.response?.data?.error || 'Erro ao enviar mensagens.'
-  } finally {
-    sending.value = false
-  }
-}
 </script>
 
 <template>
@@ -166,37 +132,10 @@ async function sendBatch() {
       </button>
     </div>
 
-    <!-- Envio em lote -->
-    <div v-if="selected.size > 0" class="card border-brand/20 bg-brand/5">
-      <h2 class="mb-3 font-semibold text-txt-primary">
-        Enviar mensagem para {{ selected.size }} lead(s)
-      </h2>
-      <div class="space-y-3">
-        <div>
-          <label class="label">Modelo de mensagem</label>
-          <textarea
-            v-model="messageTemplate"
-            rows="2"
-            class="input resize-none"
-            placeholder="Use {nome} para personalizar"
-          />
-          <p class="mt-1.5 text-xs text-txt-secondary/60">Use <code class="rounded-md bg-surface-hover px-1.5 py-0.5 text-brand text-[11px]">{nome}</code> para personalizar com o nome do negócio.</p>
-        </div>
-        <div v-if="sendError" class="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400">{{ sendError }}</div>
-        <div v-if="sendResult" class="rounded-xl bg-brand/10 border border-brand/20 px-4 py-2.5 text-sm text-brand">
-          {{ sendResult.sent }} enviadas / {{ sendResult.failed }} falhas de {{ sendResult.total }} total.
-        </div>
-        <div class="flex gap-2">
-          <button @click="sendBatch" :disabled="sending" class="btn-primary">
-            <svg v-if="sending" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-            </svg>
-            {{ sending ? 'Enviando…' : 'Enviar via WhatsApp' }}
-          </button>
-          <button @click="selected.clear()" class="btn-secondary">Cancelar seleção</button>
-        </div>
-      </div>
+    <!-- Seleção -->
+    <div v-if="selected.size > 0" class="card flex items-center gap-4 border-brand/20 bg-brand/5 py-3">
+      <p class="text-sm font-medium text-txt-primary">{{ selected.size }} lead(s) selecionado(s)</p>
+      <button @click="selected.clear()" class="btn-secondary ml-auto text-xs">Cancelar seleção</button>
     </div>
 
     <!-- Filtros -->
