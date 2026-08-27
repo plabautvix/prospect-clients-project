@@ -1,6 +1,8 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const cors = require('cors');
+const amqp = require('amqplib');
+const fs = require('fs');
 
 const puppeteerArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
 
@@ -236,6 +238,102 @@ client.on('disconnected', (reason) => {
     lastDisconnectReason = String(reason || 'unknown');
     broadcast('disconnected', lastDisconnectReason);
 });
+
+// --- RabbitMQ consumer (auto send from maps-service) ---
+const RABBITMQ_HOST = process.env.RABBITMQ_HOST;
+const RABBITMQ_PORT = process.env.RABBITMQ_PORT || 5672;
+const RABBITMQ_USER = process.env.RABBITMQ_USER || 'guest';
+const RABBITMQ_PASSWORD = process.env.RABBITMQ_PASSWORD || 'guest';
+const RABBITMQ_EXCHANGE = process.env.RABBITMQ_EXCHANGE || 'fila_mensagens';
+const RABBITMQ_ROUTING_KEY = process.env.RABBITMQ_ROUTING_KEY || 'enviar';
+const RABBITMQ_TLS = (process.env.RABBITMQ_TLS || 'false').toLowerCase() === 'true';
+const RABBITMQ_CA_CERT = process.env.RABBITMQ_CA_CERT;
+
+async function waitForClientReady() {
+    while (!isReady) {
+        await new Promise(r => setTimeout(r, 1000));
+    }
+}
+
+async function processQueueMessage(msg) {
+    try {
+        const payload = JSON.parse(msg.content.toString());
+        const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+        console.log(`[RabbitMQ] Recebido lote de ${messages.length} mensagens`);
+
+        for (const item of messages) {
+            const telefone = item?.lead;
+            const text = item?.message;
+            if (!telefone || !text) continue;
+            const jid = phoneToJid(telefone);
+            try {
+                await client.sendMessage(jid, text);
+                sentLog.push({ ts: Date.now(), to: jid, lead: { telefone }, ok: true });
+                console.log(`[RabbitMQ] Enviado para ${jid}`);
+                await new Promise(r => setTimeout(r, 500));
+            } catch (err) {
+                console.error(`[RabbitMQ] Falha ao enviar para ${jid}:`, err?.message || err);
+                sentLog.push({ ts: Date.now(), to: jid, lead: { telefone }, ok: false });
+            }
+        }
+    } catch (err) {
+        console.error('[RabbitMQ] Erro ao processar mensagem:', err?.message || err);
+    }
+}
+
+async function startRabbitMQConsumer() {
+    if (!RABBITMQ_HOST) {
+        console.log('[RabbitMQ] RABBITMQ_HOST não definido, consumer desativado');
+        return;
+    }
+
+    const protocol = RABBITMQ_TLS ? 'amqps' : 'amqp';
+    const url = `${protocol}://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@${RABBITMQ_HOST}:${RABBITMQ_PORT}`;
+    // Over TLS, validate the broker certificate against our CA.
+    const socketOptions = RABBITMQ_TLS
+        ? { ca: [fs.readFileSync(RABBITMQ_CA_CERT)], servername: RABBITMQ_HOST }
+        : {};
+    let attempt = 0;
+
+    while (true) {
+        try {
+            attempt++;
+            const connection = await amqp.connect(url, socketOptions);
+            const channel = await connection.createChannel();
+
+            await channel.assertExchange(RABBITMQ_EXCHANGE, 'direct', { durable: true });
+            await channel.assertQueue(RABBITMQ_ROUTING_KEY, { durable: true });
+            await channel.bindQueue(RABBITMQ_ROUTING_KEY, RABBITMQ_EXCHANGE, RABBITMQ_ROUTING_KEY);
+            await channel.prefetch(1);
+
+            console.log(`[RabbitMQ] Conectado em ${RABBITMQ_HOST}:${RABBITMQ_PORT}, consumindo queue "${RABBITMQ_ROUTING_KEY}"`);
+
+            console.log('[RabbitMQ] Aguardando WhatsApp estar pronto…');
+            await waitForClientReady();
+            console.log('[RabbitMQ] WhatsApp pronto, iniciando consumo');
+
+            channel.consume(RABBITMQ_ROUTING_KEY, async (msg) => {
+                if (!msg) return;
+                await processQueueMessage(msg);
+                channel.ack(msg);
+            });
+
+            connection.on('close', () => {
+                console.warn('[RabbitMQ] Conexão fechada, reconectando em 5s…');
+                setTimeout(startRabbitMQConsumer, 5000);
+            });
+            connection.on('error', (err) => {
+                console.error('[RabbitMQ] Erro de conexão:', err?.message || err);
+            });
+            return;
+        } catch (err) {
+            console.warn(`[RabbitMQ] Falha conectar (tentativa ${attempt}): ${err?.message || err}. Retry em 5s`);
+            await new Promise(r => setTimeout(r, 5000));
+        }
+    }
+}
+
+startRabbitMQConsumer();
 
 // --- Start ---
 const PORT = process.env.PORT || 3001;
