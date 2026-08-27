@@ -18,6 +18,8 @@ def create_mqtt_client() -> mqtt.Client:
 
     if settings.MQTT_USERNAME:
         client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
+    if settings.MQTT_TLS:
+        client.tls_set(ca_certs=settings.MQTT_CA_CERT or None)
 
     client.connect(settings.MQTT_HOST, settings.MQTT_PORT, settings.MQTT_KEEPALIVE)
     logger.info("MQTT client connecting to %s:%s", settings.MQTT_HOST, settings.MQTT_PORT)

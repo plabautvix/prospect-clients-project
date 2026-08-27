@@ -17,10 +17,15 @@ _host = os.getenv("MQTT_HOST", "localhost")
 _port = int(os.getenv("MQTT_PORT", "1883"))
 _username = os.getenv("MQTT_USERNAME")
 _password = os.getenv("MQTT_PASSWORD")
+_tls = os.getenv("MQTT_TLS", "false").lower() == "true"
+_ca_cert = os.getenv("MQTT_CA_CERT")
 
 mqtt_client = mqtt.Client()
 if _username:
     mqtt_client.username_pw_set(_username, _password)
+if _tls:
+    # Validate the broker certificate against our CA.
+    mqtt_client.tls_set(ca_certs=_ca_cert)
 
 
 def _connect_with_retry(retries: int = 10, delay: float = 2.0):

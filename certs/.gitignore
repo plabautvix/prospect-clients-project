@@ -1,0 +1,3 @@
+# Never commit certificates or private keys — generate them with scripts/gen-certs.sh
+*
+!.gitignore
