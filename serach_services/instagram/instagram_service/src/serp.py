@@ -12,7 +12,23 @@ PROFILE_URL = re.compile(
 )
 RESERVED_PATHS = {"p", "reel", "reels", "tv", "explore", "stories", "accounts"}
 
-BLOCK_MARKERS = ("/sorry/", "captcha-form", "unusual traffic", "trafego incomum")
+# Instagram puts the handle in the result title: "Nome (@handle) ...".
+# This is more reliable than the href, which Google wraps in an opaque
+# /goto?url=<blob> redirect that carries no readable URL.
+TITLE_HANDLE = re.compile(r"\(@([A-Za-z0-9._]{1,30})\)")
+
+# Checked against the final URL only. A real results page mentions /sorry/
+# inside its scripts, so looking for these in the body matches every page.
+BLOCK_URL_MARKERS = ("/sorry/", "/httpservice/retry")
+
+# Checked against the body, but only when the page carries no results at all:
+# a genuine results page can contain any phrase in a snippet.
+BLOCK_TEXT_MARKERS = (
+    "unusual traffic",
+    "trafego incomum",
+    "tráfego incomum",
+    "captcha-form",
+)
 
 WHITESPACE = re.compile(r"\s+")
 
@@ -41,22 +57,27 @@ def parse_results(page_html: str) -> list[SearchResult]:
     results: list[SearchResult] = []
     seen: set[str] = set()
 
-    for title in document.iter("h3"):
-        anchor = find_anchor(title)
+    for heading in document.iter("h3"):
+        anchor = find_anchor(heading)
         if anchor is None:
             continue
 
-        url = clean_url(anchor.get("href", ""))
-        if not url or url in seen:
+        title = normalize(heading.text_content())
+        if not title:
             continue
 
-        seen.add(url)
+        # The URL may come back empty: Google wraps result links in an opaque
+        # /goto?url=<blob> redirect. The result is kept anyway, because the
+        # title still carries the handle.
+        url = clean_url(anchor.get("href", ""))
+
+        key = url or title
+        if key in seen:
+            continue
+        seen.add(key)
+
         results.append(
-            SearchResult(
-                title=normalize(title.text_content()),
-                url=url,
-                snippet=find_snippet(anchor),
-            )
+            SearchResult(title=title, url=url, snippet=find_snippet(anchor))
         )
 
     return results
@@ -67,18 +88,57 @@ def is_blocked(url: str, page_html: str) -> bool:
 
     Without this, a block looks exactly like a broken parser: zero results and
     no error.
+
+    The two marker sets are checked differently on purpose. A real results page
+    is hundreds of kilobytes of markup that mentions /sorry/ in its scripts, so
+    body text alone cannot decide this. A block page, on the other hand, never
+    carries result titles.
     """
-    haystack = f"{url} {page_html}".lower()
-    return any(marker in haystack for marker in BLOCK_MARKERS)
+    lowered_url = (url or "").lower()
+    if any(marker in lowered_url for marker in BLOCK_URL_MARKERS):
+        return True
+
+    body = (page_html or "").lower()
+    if not body:
+        return True
+    if "<h3" in body:
+        return False
+    return any(marker in body for marker in BLOCK_TEXT_MARKERS)
 
 
-def instagram_handle(url: str) -> str | None:
-    """Return the handle of an Instagram profile URL, or None for anything else."""
-    match = PROFILE_URL.match(url)
+def instagram_handle(result: SearchResult) -> str | None:
+    """Return the Instagram handle of a result, or None if it is not a profile.
+
+    The URL is tried first, then the title. Google no longer exposes the target
+    URL on result anchors: it wraps them in /goto?url=<opaque blob>, so on a
+    live page the title is usually the only readable source.
+    """
+    return handle_from_url(result.url) or handle_from_title(result.title)
+
+
+def handle_from_url(url: str) -> str | None:
+    match = PROFILE_URL.match(url or "")
     if not match:
         return None
     handle = match.group(1).lower()
     return None if handle in RESERVED_PATHS else handle
+
+
+def handle_from_title(title: str) -> str | None:
+    match = TITLE_HANDLE.search(title or "")
+    if not match:
+        return None
+    handle = match.group(1).lower()
+    return None if handle in RESERVED_PATHS else handle
+
+
+def profile_url(handle: str) -> str:
+    """Canonical profile URL, rebuilt from the handle.
+
+    Rebuilding beats carrying Google's redirect around: the stored lead gets a
+    URL that works, and nothing downstream depends on Google's link format.
+    """
+    return f"https://www.instagram.com/{handle}/"
 
 
 def find_anchor(title):

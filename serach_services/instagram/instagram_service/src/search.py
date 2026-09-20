@@ -7,7 +7,13 @@ from urllib.parse import urlencode
 import nodriver as uc
 
 import config
-from serp import SearchResult, instagram_handle, is_blocked, parse_results
+from serp import (
+    SearchResult,
+    instagram_handle,
+    is_blocked,
+    parse_results,
+    profile_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +98,16 @@ class GoogleSearch:
             if not results:
                 break
             for result in results:
-                handle = instagram_handle(result.url)
+                handle = instagram_handle(result)
                 if handle and handle not in profiles:
-                    profiles[handle] = result
+                    # The stored URL is rebuilt from the handle, because the one
+                    # on the page is Google's /goto redirect and does not work
+                    # outside a search session.
+                    profiles[handle] = SearchResult(
+                        title=result.title,
+                        url=profile_url(handle),
+                        snippet=result.snippet,
+                    )
 
         return profiles
 

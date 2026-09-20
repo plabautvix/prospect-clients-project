@@ -1,6 +1,13 @@
 import pytest
 
-from serp import instagram_handle, is_blocked, parse_results
+from serp import (
+    SearchResult,
+    handle_from_title,
+    handle_from_url,
+    instagram_handle,
+    is_blocked,
+    parse_results,
+)
 
 
 def test_parses_every_organic_result(results_html):
@@ -45,21 +52,122 @@ def test_empty_html_gives_no_results():
         ("https://clinicaveterinariacampinas.com.br/equipe", None),
     ],
 )
-def test_instagram_handle(url, expected):
-    assert instagram_handle(url) == expected
+def test_handle_from_url(url, expected):
+    assert handle_from_url(url) == expected
+
+
+@pytest.mark.parametrize(
+    "title,expected",
+    [
+        # Titles captured from a live results page.
+        ("Clinica Veterinaria 24h (@coracaoanimal.24h)", "coracaoanimal.24h"),
+        ("Verum Diagnóstico Veterinário (@verumdiagnostico)", "verumdiagnostico"),
+        (
+            "Oncovida Veterinaria (@oncovidaveterinaria) · Campinas, SP",
+            "oncovidaveterinaria",
+        ),
+        ("Late e Mia Campinas (@clinicalateemia)", "clinicalateemia"),
+        ("Equipe - Clinica Veterinaria Campinas", None),
+        ("", None),
+    ],
+)
+def test_handle_from_title(title, expected):
+    assert handle_from_title(title) == expected
+
+
+def test_handle_falls_back_to_the_title_when_google_hides_the_url():
+    # Google wraps result links in /goto?url=<blob>, so clean_url gives back an
+    # empty string and the title is the only readable source.
+    result = SearchResult(
+        title="Clinica Veterinaria 24h (@coracaoanimal.24h)", url="", snippet=""
+    )
+
+    assert instagram_handle(result) == "coracaoanimal.24h"
+
+
+def test_url_wins_over_the_title_when_both_are_present():
+    result = SearchResult(
+        title="Outro Nome (@do_titulo)",
+        url="https://www.instagram.com/da_url/",
+        snippet="",
+    )
+
+    assert instagram_handle(result) == "da_url"
 
 
 def test_profiles_are_the_only_thing_kept(results_html):
     handles = [
         handle
         for result in parse_results(results_html)
-        if (handle := instagram_handle(result.url))
+        if (handle := instagram_handle(result))
     ]
 
     assert handles == ["dra.anasilva.vet", "clinica.petvida", "vet_paula_ramos"]
 
 
-def test_block_page_is_not_confused_with_an_empty_page(results_html):
-    assert is_blocked("https://www.google.com/sorry/index", "") is True
-    assert is_blocked("https://www.google.com/search?q=x", "captcha-form") is True
+def test_block_page_is_detected_by_the_url():
+    assert is_blocked("https://www.google.com/sorry/index", "<html></html>") is True
+
+
+def test_block_page_is_detected_by_its_text_when_there_are_no_results():
+    # Wording taken from the live block page.
+    block = (
+        "<html><body>Nossos sistemas detectaram tráfego incomum na sua rede"
+        "</body></html>"
+    )
+
+    assert is_blocked("https://www.google.com/search?q=x", block) is True
+
+
+def test_a_real_results_page_is_never_a_block(results_html):
     assert is_blocked("https://www.google.com/search?q=x", results_html) is False
+
+
+def test_sorry_inside_the_body_is_not_a_block(results_html):
+    # A live results page is hundreds of KB and mentions /sorry/ in its
+    # scripts. Matching that in the body flagged every page as blocked.
+    page = results_html + "<script>var u='/sorry/index';</script>"
+
+    assert is_blocked("https://www.google.com/search?q=x", page) is False
+
+
+def test_empty_response_is_a_block():
+    assert is_blocked("https://www.google.com/search?q=x", "") is True
+
+
+# Layout captured from a live results page in September 2026: the h3 sits
+# inside an anchor whose href is an opaque /goto?url= redirect, and the real
+# profile URL appears nowhere in the markup.
+LIVE_LAYOUT = """
+<div><div><div><div><div><div><div><div>
+  <a href="/goto?url=CAESZAHrOzAVg2ss4N3eAWk4OcxkrVcY3D2V1FZ6vkchH"><span>
+    <h3>Clinica Veterinaria 24h (@coracaoanimal.24h)</h3>
+  </span></a>
+  <div>Atendimento veterinario 24 horas em Campinas, urgencia e emergencia.</div>
+</div></div></div></div></div></div></div></div>
+<div><div><div><div><div><div><div><div>
+  <a href="/goto?url=CAESYwHrOzAVK4aeN1BPPX0bK-aRXU2b9Bx3iCp0PoP9v"><span>
+    <h3>Oncovida Veterinaria (@oncovidaveterinaria) &middot; Campinas, SP</h3>
+  </span></a>
+  <div>Oncologia veterinaria, quimioterapia e cuidados paliativos.</div>
+</div></div></div></div></div></div></div></div>
+"""
+
+
+def test_live_layout_yields_handles_despite_the_goto_redirect():
+    results = parse_results(LIVE_LAYOUT)
+
+    assert len(results) == 2
+    # clean_url cannot resolve /goto?url=, and that must not drop the result.
+    assert all(r.url == "" for r in results)
+    assert [instagram_handle(r) for r in results] == [
+        "coracaoanimal.24h",
+        "oncovidaveterinaria",
+    ]
+
+
+def test_live_layout_still_extracts_the_snippet():
+    first = parse_results(LIVE_LAYOUT)[0]
+
+    assert "Atendimento veterinario 24 horas" in first.snippet
+    assert "Oncovida" not in first.snippet
