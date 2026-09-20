@@ -1,0 +1,9 @@
+# Específico deste serviço. O resto vem do .gitignore da raiz.
+
+# HTML capturado pelo probe.py para diagnóstico e para virar fixture.
+# O que for promovido a fixture entra em tests/fixtures/, que é versionado.
+dumps/
+
+# Perfil do Chrome, quando CHROME_PROFILE_DIR aponta para dentro do projeto.
+chrome-profile/
+.chrome-profile/

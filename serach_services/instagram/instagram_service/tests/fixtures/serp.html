@@ -1,0 +1,118 @@
+<!doctype html>
+<!--
+  Synthetic fixture. Mirrors the structure of a pt-BR results page (h3 inside
+  the anchor, snippet in a sibling outside it, obfuscated class names), but is
+  not HTML captured from Google.
+
+  Replace it with a real capture when you can:
+      python scripts/probe.py 'site:instagram.com "veterinaria" Campinas' --dump
+  and move dumps/last.html here. From then on the test guards the real layout.
+-->
+<html lang="pt-BR">
+<head><title>site:instagram.com "veterinaria" Campinas - Pesquisa Google</title></head>
+<body class="srp">
+<div id="main"><div id="cnt"><div class="GyAeWb"><div id="rcnt">
+<div class="s6JM6d"><div id="center_col"><div id="search"><div id="rso">
+
+  <!-- 1: perfil, data em pt-BR no snippet, numeros em pt-BR -->
+  <div class="MjjYud">
+    <div class="g Ww4FFb vt6azd tF2Cxc asEBEc">
+      <div class="kb0PBd cvP2Ce jGGQ5e">
+        <div class="yuRUbf"><div><span>
+          <a jsname="UWckNb" href="https://www.instagram.com/dra.anasilva.vet/" data-ved="2ahUKEwi">
+            <br>
+            <h3 class="LC20lb MBeuO DKV0Md">Dra. Ana Silva (@dra.anasilva.vet) &bull; Instagram photos and videos</h3>
+            <div class="notranslate TbwUpd NJjxre">
+              <span class="VuuXrf">Instagram</span>
+              <cite class="qLRx3b tjvcx" role="text">https://www.instagram.com<span class="ylgVCe" role="text"> &rsaquo; dra.anasilva.vet</span></cite>
+            </div>
+          </a>
+        </span></div></div>
+      </div>
+      <div class="kb0PBd cvP2Ce">
+        <div class="VwiC3b yXK7lf p4wth r025kc hJNv6b Hdw6tb"><span>15 de ago. de 2026 &mdash; </span><span>3.412 seguidores, 890 seguindo, 267 publicacoes. Medica veterinaria CRMV-SP 12345 | Especialista em felinos | Campinas/SP | Agende pelo link</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2: perfil, numeros em ingles, sem data -->
+  <div class="MjjYud">
+    <div class="g Ww4FFb vt6azd tF2Cxc asEBEc">
+      <div class="kb0PBd cvP2Ce jGGQ5e">
+        <div class="yuRUbf"><div><span>
+          <a jsname="UWckNb" href="https://www.instagram.com/clinica.petvida/">
+            <br>
+            <h3 class="LC20lb MBeuO DKV0Md">Clinica PetVida (@clinica.petvida) &bull; Instagram</h3>
+            <div class="notranslate TbwUpd"><cite class="qLRx3b" role="text">https://www.instagram.com &rsaquo; clinica.petvida</cite></div>
+          </a>
+        </span></div></div>
+      </div>
+      <div class="kb0PBd cvP2Ce">
+        <div class="VwiC3b yXK7lf"><span>8,120 Followers, 431 Following, 1,204 Posts - See Instagram photos and videos from Clinica PetVida. Atendimento veterinario 24h no Cambui, Campinas.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3: perfil sem numeros e sem data, so bio -->
+  <div class="MjjYud">
+    <div class="g Ww4FFb vt6azd tF2Cxc asEBEc">
+      <div class="kb0PBd cvP2Ce jGGQ5e">
+        <div class="yuRUbf"><div><span>
+          <a jsname="UWckNb" href="https://www.instagram.com/vet_paula_ramos?hl=pt-br">
+            <br>
+            <h3 class="LC20lb MBeuO DKV0Md">Paula Ramos | Veterinaria (@vet_paula_ramos)</h3>
+            <div class="notranslate TbwUpd"><cite class="qLRx3b" role="text">https://www.instagram.com &rsaquo; vet_paula_ramos</cite></div>
+          </a>
+        </span></div></div>
+      </div>
+      <div class="kb0PBd cvP2Ce">
+        <div class="VwiC3b yXK7lf"><span>Medica veterinaria dedicada a dermatologia animal em Campinas e regiao. Atendimento domiciliar mediante agendamento previo.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4: post, nao perfil. Deve ser extraido pelo parser e descartado depois. -->
+  <div class="MjjYud">
+    <div class="g Ww4FFb vt6azd tF2Cxc asEBEc">
+      <div class="kb0PBd cvP2Ce jGGQ5e">
+        <div class="yuRUbf"><div><span>
+          <a jsname="UWckNb" href="https://www.instagram.com/p/C9xYzAbCdEf/">
+            <br>
+            <h3 class="LC20lb MBeuO DKV0Md">Dra. Ana Silva on Instagram: "Hoje atendemos a Mel, uma gata persa"</h3>
+            <div class="notranslate TbwUpd"><cite class="qLRx3b" role="text">https://www.instagram.com &rsaquo; p</cite></div>
+          </a>
+        </span></div></div>
+      </div>
+      <div class="kb0PBd cvP2Ce">
+        <div class="VwiC3b yXK7lf"><span>ha 3 dias &mdash; </span><span>Hoje atendemos a Mel, uma gata persa de 12 anos, para avaliacao renal. Agendamentos pelo link da bio.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5: resultado fora do dominio, envolvido no redirect /url?q= do Google -->
+  <div class="MjjYud">
+    <div class="g Ww4FFb vt6azd tF2Cxc asEBEc">
+      <div class="kb0PBd cvP2Ce jGGQ5e">
+        <div class="yuRUbf"><div><span>
+          <a jsname="UWckNb" href="/url?q=https://clinicaveterinariacampinas.com.br/equipe&amp;sa=U&amp;ved=2ahUKEwi">
+            <br>
+            <h3 class="LC20lb MBeuO DKV0Md">Equipe - Clinica Veterinaria Campinas</h3>
+            <div class="notranslate TbwUpd"><cite class="qLRx3b" role="text">https://clinicaveterinariacampinas.com.br</cite></div>
+          </a>
+        </span></div></div>
+      </div>
+      <div class="kb0PBd cvP2Ce">
+        <div class="VwiC3b yXK7lf"><span>Conheca nossa equipe de medicos veterinarios em Campinas. Atendimento clinico, cirurgico e exames de imagem.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6: ancora sem h3 (bloco de navegacao). Nao deve virar resultado. -->
+  <div class="AaVjTc">
+    <a href="https://www.google.com/search?q=veterinaria&amp;start=10" aria-label="Pagina 2"><span>2</span></a>
+  </div>
+
+</div></div></div></div>
+</div></div></div></div>
+</body>
+</html>
