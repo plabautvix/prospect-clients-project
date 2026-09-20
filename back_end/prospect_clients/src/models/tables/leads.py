@@ -5,8 +5,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Integer, String
 
 
-
-
 class Leads(Base):
     """
     This class represents the 'leads' table in the database.

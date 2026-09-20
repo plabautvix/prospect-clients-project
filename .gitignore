@@ -1,0 +1,59 @@
+# Regras válidas para todo o repositório.
+# Serviços podem ter um .gitignore próprio para o que é específico deles.
+
+# ─── Python: bytecode e caches ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ─── Ferramentas de teste e lint ────────────────────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# ─── Ambientes virtuais ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Segredos e configuração local ──────────────────────────────────────────
+# .env.example fica versionado de propósito: é a documentação das variáveis.
+.env
+.env.local
+*.env
+!.env.example
+
+# ─── Bancos locais ──────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Build e distribuição ───────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+*.egg
+.Python
+
+# ─── Node ───────────────────────────────────────────────────────────────────
+node_modules/
+
+# ─── Logs ───────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ─── Editores e sistema operacional ─────────────────────────────────────────
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+tempCodeRunnerFile.py
