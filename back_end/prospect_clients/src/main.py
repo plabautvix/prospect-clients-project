@@ -2,7 +2,6 @@ import logging
 from contextlib import asynccontextmanager
 
 from prospect_clients.src.configurations.database import engine
-from prospect_clients.src.models.tables.base import Base
 from prospect_clients.src.controllers.automations_controller import router as automations_router
 from prospect_clients.src.controllers.user_controller import router as users_router
 from prospect_clients.src.controllers.leads_controller import router as leads_router
@@ -15,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
-Base.metadata.create_all(bind=engine)
+# The schema is owned by Alembic: `alembic upgrade head` runs before the app
+# starts (see the Dockerfile). The application never creates or alters tables.
 
 
 @asynccontextmanager

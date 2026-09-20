@@ -12,4 +12,6 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "prospect_clients.src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Migrations run as a separate step before the app, so the application itself
+# never creates or alters tables.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn prospect_clients.src.main:app --host 0.0.0.0 --port 8000"]
