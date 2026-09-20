@@ -5,7 +5,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
-      - "8883:8883"
+      - "${MQTT_HOST_PORT:-18883}:8883"
     environment:
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
