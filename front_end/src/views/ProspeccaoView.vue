@@ -4,6 +4,26 @@ import { useOperationsStore } from '@/stores/operations'
 
 const store = useOperationsStore()
 
+const SOURCES = [
+  {
+    id: 'maps',
+    label: 'Google Maps',
+    searchLabel: 'Busca no Google Maps',
+    placeholder: 'Ex: barbearias em São Paulo',
+    titlePlaceholder: 'Ex: Barbearias SP',
+    hint: 'Coleta nome, telefone, endereço e site dos negócios encontrados.',
+  },
+  {
+    id: 'instagram',
+    label: 'Instagram',
+    searchLabel: 'Perfil que você procura',
+    placeholder: 'Ex: médica veterinária em Campinas',
+    titlePlaceholder: 'Ex: Vets Campinas',
+    hint: 'Busca perfis pelo índice do Google. Não acessa o Instagram e não envia mensagem.',
+  },
+]
+
+const source = ref('maps')
 const searchText = ref('')
 const messageTemplate = ref('Olá {nome}! Vi seu negócio e gostaria de apresentar uma oportunidade.')
 const title = ref('')
@@ -16,17 +36,37 @@ onMounted(() => store.fetchOperations())
 
 const activeOps = computed(() => store.operations.filter(o => o.status === 1))
 const inactiveOps = computed(() => store.operations.filter(o => o.status === 0))
+const current = computed(() => SOURCES.find(s => s.id === source.value))
+const needsMessage = computed(() => source.value === 'maps')
+
+function sourceLabel(id) {
+  return SOURCES.find(s => s.id === id)?.label || 'Google Maps'
+}
+
+function selectSource(id) {
+  source.value = id
+  formError.value = ''
+  formSuccess.value = ''
+}
 
 async function startOp() {
-  if (!searchText.value.trim() || !messageTemplate.value.trim()) {
-    formError.value = 'Preencha a busca e o modelo de mensagem.'
+  if (!searchText.value.trim()) {
+    formError.value = 'Preencha a busca.'
+    return
+  }
+  if (needsMessage.value && !messageTemplate.value.trim()) {
+    formError.value = 'Preencha o modelo de mensagem.'
     return
   }
   starting.value = true
   formError.value = ''
   formSuccess.value = ''
   try {
-    await store.startOperation(searchText.value.trim(), messageTemplate.value.trim(), title.value.trim() || null)
+    await store.startOperation(source.value, {
+      searchText: searchText.value.trim(),
+      messageUser: needsMessage.value ? messageTemplate.value.trim() : null,
+      title: title.value.trim() || null,
+    })
     formSuccess.value = 'Operação iniciada! Os leads serão coletados em breve.'
     searchText.value = ''
     title.value = ''
@@ -37,10 +77,10 @@ async function startOp() {
   }
 }
 
-async function stopOp(id) {
-  stopping.value = id
+async function stopOp(op) {
+  stopping.value = op.id_operation
   try {
-    await store.stopOperation(id)
+    await store.stopOperation(op.id_operation, op.source)
   } finally {
     stopping.value = null
   }
@@ -51,31 +91,51 @@ async function stopOp(id) {
   <div class="space-y-8">
     <div>
       <h1 class="text-2xl font-extrabold text-txt-primary">Prospecção</h1>
-      <p class="mt-1 text-sm text-txt-secondary">Inicie uma operação de busca no Google Maps e colete leads automaticamente.</p>
+      <p class="mt-1 text-sm text-txt-secondary">Escolha a fonte, descreva quem você procura e colete leads automaticamente.</p>
     </div>
 
     <!-- Form -->
     <div class="card">
       <h2 class="mb-5 font-semibold text-txt-primary">Nova operação</h2>
       <form @submit.prevent="startOp" class="space-y-5">
+        <div>
+          <label class="label">Fonte</label>
+          <div class="flex gap-2">
+            <button
+              v-for="s in SOURCES"
+              :key="s.id"
+              type="button"
+              @click="selectSource(s.id)"
+              :class="[
+                'rounded-xl border px-4 py-2 text-sm font-medium transition',
+                source === s.id
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              {{ s.label }}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-txt-secondary/60">{{ current.hint }}</p>
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="label">Busca no Google Maps <span class="text-red-400">*</span></label>
-            <input v-model="searchText" type="text" placeholder="Ex: barbearias em São Paulo" class="input" required />
+            <label class="label">{{ current.searchLabel }} <span class="text-red-400">*</span></label>
+            <input v-model="searchText" type="text" :placeholder="current.placeholder" class="input" required />
           </div>
           <div>
             <label class="label">Título da operação (opcional)</label>
-            <input v-model="title" type="text" placeholder="Ex: Barbearias SP" class="input" />
+            <input v-model="title" type="text" :placeholder="current.titlePlaceholder" class="input" />
           </div>
         </div>
-        <div>
+        <div v-if="needsMessage">
           <label class="label">Modelo de mensagem <span class="text-red-400">*</span></label>
           <textarea
             v-model="messageTemplate"
             rows="3"
             placeholder="Use {nome} para personalizar. Ex: Olá {nome}! Temos uma oferta especial."
             class="input resize-none"
-            required
           />
           <p class="mt-1.5 text-xs text-txt-secondary/60">Use <code class="rounded-md bg-surface-hover px-1.5 py-0.5 text-brand text-[11px]">{nome}</code> para inserir o nome do negócio automaticamente.</p>
         </div>
@@ -128,11 +188,12 @@ async function stopOp(id) {
                 <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand"></span>
               </span>
               <p class="text-sm font-medium text-txt-primary">{{ op.operation_name }}</p>
+              <span class="badge-gray text-[10px]">{{ sourceLabel(op.source) }}</span>
             </div>
             <p class="mt-0.5 truncate pl-4 text-xs text-txt-secondary/60">{{ op.search_text }}</p>
           </div>
           <button
-            @click="stopOp(op.id_operation)"
+            @click="stopOp(op)"
             :disabled="stopping === op.id_operation"
             class="btn-danger ml-4 shrink-0 text-xs"
           >
@@ -154,6 +215,7 @@ async function stopOp(id) {
           <thead>
             <tr class="border-b border-brd-light">
               <th class="pb-3 text-left font-medium text-txt-secondary">Nome</th>
+              <th class="pb-3 text-left font-medium text-txt-secondary">Fonte</th>
               <th class="pb-3 text-left font-medium text-txt-secondary">Busca</th>
               <th class="pb-3 text-left font-medium text-txt-secondary">Status</th>
             </tr>
@@ -161,6 +223,7 @@ async function stopOp(id) {
           <tbody class="divide-y divide-brd-light">
             <tr v-for="op in inactiveOps" :key="op.id_operation">
               <td class="py-3 font-medium text-txt-primary">{{ op.operation_name }}</td>
+              <td class="py-3 text-txt-secondary">{{ sourceLabel(op.source) }}</td>
               <td class="py-3 text-txt-secondary">{{ op.search_text }}</td>
               <td class="py-3"><span class="badge-gray">Encerrada</span></td>
             </tr>

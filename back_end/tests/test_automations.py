@@ -42,6 +42,39 @@ class TestAutomationsService:
         )
         assert mock_publish.call_args[0][1]["title"] is None
 
+    @patch("prospect_clients.src.services.automations_service.publish_message")
+    def test_activate_instagram_search(self, mock_publish):
+        service = AutomationsService()
+        result = service.activate_instagram_search(
+            search_text="medica veterinaria em Campinas",
+            user_id=1,
+            id_operation=7,
+        )
+
+        assert result == {"message": "Instagram search started"}
+        mock_publish.assert_called_once_with(
+            "prospect/instagram",
+            {
+                "status": 1,
+                "id_operation": 7,
+                "search_text": "medica veterinaria em Campinas",
+                "user_id": 1,
+            },
+        )
+        # The user token must NOT be propagated to the instagram-service.
+        assert "token" not in mock_publish.call_args[0][1]
+
+    @patch("prospect_clients.src.services.automations_service.publish_message")
+    def test_deactivate_instagram_search(self, mock_publish):
+        service = AutomationsService()
+        result = service.deactivate_instagram_search(id_operation=42, user_id=1)
+
+        assert result == {"message": "Instagram search stopped"}
+        mock_publish.assert_called_once_with(
+            "prospect/instagram",
+            {"status": 0, "id_operation": 42, "user_id": 1},
+        )
+
 
 class TestAutomationsEndpoints:
     @patch("prospect_clients.src.controllers.automations_controller.AutomationsService")
@@ -91,3 +124,56 @@ class TestAutomationsEndpoints:
             params={"serach_text": "test", "message_user": "oi"},
         )
         assert response.status_code in (401, 403)
+
+    @patch("prospect_clients.src.controllers.automations_controller.AutomationsService")
+    def test_instagram_activate_endpoint_creates_operation(self, mock_service_cls, client):
+        token = self._login(client, "ig@test.com")
+
+        response = client.post(
+            "/automations/operations/instagram/activate",
+            params={"search_text": "medica veterinaria em Campinas"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["search_text"] == "medica veterinaria em Campinas"
+        assert data["status"] == 1
+        # The source is what lets the frontend route the deactivate call.
+        assert data["source"] == "instagram"
+
+        call_kwargs = mock_service_cls.return_value.activate_instagram_search.call_args[1]
+        assert call_kwargs["id_operation"] == data["id_operation"]
+
+    @patch("prospect_clients.src.controllers.automations_controller.AutomationsService")
+    def test_maps_operations_still_default_to_the_maps_source(self, mock_service_cls, client):
+        token = self._login(client, "src@test.com")
+
+        response = client.post(
+            "/automations/operations/maps/activate",
+            params={"serach_text": "padarias", "message_user": "Ola"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.json()["source"] == "maps"
+
+    @patch("prospect_clients.src.controllers.automations_controller.AutomationsService")
+    def test_instagram_deactivate_endpoint(self, mock_service_cls, client):
+        token = self._login(client, "igoff@test.com")
+
+        response = client.put(
+            "/automations/operations/instagram/deactivate",
+            params={"id_operation": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "Instagram search stopped"
+
+    @staticmethod
+    def _login(client, email: str) -> str:
+        client.post("/users/", json={"email": email, "password": "pass"})
+        login = client.post(
+            "/users/login", data={"username": email, "password": "pass"}
+        )
+        return login.json()["access_token"]

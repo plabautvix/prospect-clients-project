@@ -20,20 +20,29 @@ export const useOperationsStore = defineStore('operations', () => {
     }
   }
 
-  async function startOperation(searchText, messageUser, title) {
-    const { data } = await api.post('/automations/operations/maps/activate', null, {
-      params: { serach_text: searchText, message_user: messageUser, title },
+  // The maps endpoint takes `serach_text` and a message template; the instagram
+  // one takes `search_text` and no message, since nothing is sent yet.
+  function activateParams(source, { searchText, messageUser, title }) {
+    if (source === 'instagram') {
+      return { search_text: searchText, title }
+    }
+    return { serach_text: searchText, message_user: messageUser, title }
+  }
+
+  async function startOperation(source, payload) {
+    const { data } = await api.post(`/automations/operations/${source}/activate`, null, {
+      params: activateParams(source, payload),
     })
     operations.value = [data, ...operations.value]
   }
 
-  async function stopOperation(id) {
+  async function stopOperation(id, source = 'maps') {
     // Optimistic update: reflect the stop in the UI immediately.
     const op = operations.value.find((o) => o.id_operation === id)
     const previousStatus = op?.status
     if (op) op.status = 0
     try {
-      await api.put('/automations/operations/maps/deactivate', null, {
+      await api.put(`/automations/operations/${source}/deactivate`, null, {
         params: { id_operation: id },
       })
       await fetchOperations()

@@ -102,9 +102,38 @@ services:
       backend:
         condition: service_started
 
+  instagram-service:
+    build: ./serach_services/instagram/instagram_service
+    # Chrome needs more than the default 64MB of shared memory.
+    shm_size: 1gb
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 8883
+      MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
+      MQTT_TLS: "true"
+      MQTT_CA_CERT: /certs/ca.crt
+      MQTT_TOPIC: prospect/instagram
+      BACKEND_API_URL: http://backend:8000
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
+      # Persisted so the cookie-consent choice survives a restart.
+      CHROME_PROFILE_DIR: /data/chrome-profile
+    volumes:
+      - ./serach_services/instagram/instagram_service/src:/app/src
+      - ./certs/ca.crt:/certs/ca.crt:ro
+      - instagram-chrome-profile:/data/chrome-profile
+    depends_on:
+      mosquitto:
+        condition: service_started
+      backend:
+        condition: service_started
+
   frontend:
     build: ./front_end
     ports:
       - "80:80"
     depends_on:
       - backend
+
+volumes:
+  instagram-chrome-profile:

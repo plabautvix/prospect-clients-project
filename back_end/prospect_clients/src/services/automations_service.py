@@ -50,6 +50,33 @@ class AutomationsService:
         )
         return {"message": "Scraping process stopped"}
 
+    def activate_instagram_search(
+        self, search_text: str, user_id: int, id_operation: int,
+    ) -> dict:
+        publish_message(
+            "prospect/instagram",
+            {
+                "status": 1,
+                "id_operation": id_operation,
+                "search_text": search_text,
+                "user_id": user_id,
+            },
+        )
+        return {"message": "Instagram search started"}
+
+    def deactivate_instagram_search(
+        self, id_operation: int, user_id: int,
+    ) -> dict:
+        publish_message(
+            "prospect/instagram",
+            {
+                "status": 0,
+                "id_operation": id_operation,
+                "user_id": user_id,
+            },
+        )
+        return {"message": "Instagram search stopped"}
+
     def scrape_leads_from_maps(self, search_text: str) -> dict:
         options = _get_firefox_options()
         driver = webdriver.Firefox(options=options)

@@ -6,17 +6,20 @@
 
 ## 1. Visão geral
 
-A aplicação coleta *leads* do Google Maps a partir de uma busca e **enfileira** as
-mensagens personalizadas no RabbitMQ. O envio propriamente dito não existe mais: a
-fila fica retida à espera de um consumidor futuro. É composta por três serviços +
-duas peças de infraestrutura de mensageria, orquestrados por `docker-compose.yml`.
+A aplicação coleta *leads* a partir de uma busca, por duas fontes: Google Maps
+(negócios com telefone e endereço) e Instagram (perfis encontrados pelo índice do
+Google). No caso do Maps ela ainda **enfileira** mensagens personalizadas no
+RabbitMQ; o envio propriamente dito não existe mais, e a fila fica retida à espera
+de um consumidor futuro. É composta por quatro serviços + duas peças de
+infraestrutura de mensageria, orquestrados por `docker-compose.yml`.
 
 | Serviço | Stack | Porta (host) | Responsabilidade |
 |---|---|---|---|
 | `frontend` | Vue 3 + Vite + nginx | 80 | UI (login, prospecção, leads) |
 | `backend` | FastAPI (Python 3.12) | 8000 | API REST, autenticação, persistência, orquestra o scraping via MQTT |
 | `maps-service` | Python + Selenium/Firefox | — | Faz o scraping do Google Maps, grava leads na API e enfileira mensagens |
-| `mosquitto` | Eclipse Mosquitto (MQTT) | 8883 (TLS) | Bus de comando backend → maps-service |
+| `instagram-service` | Python + nodriver/Chrome | — | Busca perfis do Instagram pelo índice do Google e grava leads na API |
+| `mosquitto` | Eclipse Mosquitto (MQTT) | 8883 (TLS) | Bus de comando backend → serviços de scraping |
 | `rabbitmq` | RabbitMQ | 5671 (AMQPS) / 15672 | Fila de mensagens produzida pelo maps-service (sem consumidor) |
 
 ## 2. Diagrama de componentes
@@ -28,15 +31,18 @@ flowchart LR
     BE[backend\nFastAPI :8000]
     MQTT{{mosquitto\nMQTTS :8883}}
     MAPS[maps-service\nSelenium/Firefox]
+    IG[instagram-service\nnodriver/Chrome]
     RMQ{{rabbitmq\nexchange fila_mensagens}}
     DB[(SQLite test.db)]
 
     User -->|HTTP + JWT| FE
     FE -->|/api/backend/* JWT| BE
     BE --> DB
-    BE -->|publish prospect/maps\n(sem token, só user_id)| MQTT
-    MQTT -->|subscribe| MAPS
+    BE -->|publish prospect/maps\nprospect/instagram\n(sem token, só user_id)| MQTT
+    MQTT -->|subscribe prospect/maps| MAPS
+    MQTT -->|subscribe prospect/instagram| IG
     MAPS -->|POST /leads?user_id, PATCH status\nX-Service-Key| BE
+    IG -->|POST /leads?user_id, PATCH status\nX-Service-Key| BE
     MAPS -->|publish fila_mensagens| RMQ
     RMQ -.->|queue enviar\n(sem consumidor)| Futuro([Serviço de envio futuro])
 ```
@@ -53,7 +59,17 @@ flowchart LR
   - `GET/POST /leads/`, `GET /leads/categories` (paginação + filtros server-side)
   - `GET/POST /operations/`, `PATCH /operations/{id}/status`
   - `POST /automations/operations/maps/activate`, `PUT /automations/operations/maps/deactivate`
-- **Mensageria de saída:** `utils/publisher.py` publica no MQTT (tópico `prospect/maps`).
+  - `POST /automations/operations/instagram/activate`, `PUT /automations/operations/instagram/deactivate`
+- **Mensageria de saída:** `utils/publisher.py` publica no MQTT (tópicos `prospect/maps` e `prospect/instagram`).
+- **Migrations:** o schema pertence ao **Alembic** (`back_end/migrations/`). A
+  aplicação não cria nem altera tabela: o `alembic upgrade head` roda como passo
+  separado antes do uvicorn (ver `back_end/Dockerfile`). `env.py` lê a URL de
+  `configurations/database.py`, então há uma só fonte de verdade.
+  - `0001_initial_schema` é o baseline do que o `create_all` criava.
+  - `0002_add_operations_source` adiciona `operations.source`.
+- **`operations.source`** ("maps" ou "instagram") diz ao front qual endpoint de
+  deactivate chamar, para que parar uma operação continue funcionando depois de
+  um reload.
 
 ### 3.2 maps-service (Selenium)
 - **Entrada:** consome o tópico MQTT `prospect/maps` (`messaging/mqtt_handler.py`).
@@ -66,7 +82,21 @@ flowchart LR
 - **Estado:** operações ativas vivem **em memória** (`_active_operations`); reconciliadas
   no startup do backend (ver `OperationsService.reset_orphaned_operations`).
 
-### 3.3 frontend (Vue)
+### 3.3 instagram-service (nodriver)
+- **Entrada:** consome o tópico MQTT `prospect/instagram` (`src/main.py`).
+- **Execução:** uma *thread* daemon por operação com `stop_event` (`src/operations.py`),
+  e um event loop asyncio dentro dela, porque o nodriver é assíncrono. A busca em
+  si fica em `src/search.py`, e o parse do HTML em `src/serp.py`.
+- **Estratégia:** monta um dork `site:instagram.com <texto da busca>`, lê a página
+  de resultados do Google com um Chrome real e extrai os handles. Nenhuma conta
+  do Instagram é usada e nenhuma requisição vai para o Instagram.
+- **Saída:** grava leads chamando `POST /leads/` (`nome` recebe `@handle`, que é
+  único no Instagram e é a chave do upsert) e atualiza status via
+  `PATCH /operations/{id}/status`. Não publica no RabbitMQ: não há envio.
+- **Estado:** operações ativas vivem **em memória**, como no maps; reconciliadas
+  no startup do backend por `OperationsService.reset_orphaned_operations`.
+
+### 3.4 frontend (Vue)
 - Pinia stores (`auth`, `leads`, `operations`).
 - Token JWT guardado em `localStorage`; injetado em toda request via interceptor
   (`services/backend.js`). nginx faz proxy de `/api/backend` → backend.
@@ -86,16 +116,28 @@ flowchart LR
    `X-Service-Key`) **e** publica mensagens no RabbitMQ.
 4. As mensagens ficam na fila `enviar` até que um consumidor seja implementado.
 
-### 4.3 Parar operação
-1. `PUT /automations/operations/maps/deactivate` marca status=0 no banco e publica
-   MQTT `{status:0, id_operation}`.
-2. `maps-service` seta o `stop_event` da thread e encerra o navegador.
+### 4.3 Iniciar busca no Instagram
+1. `POST /automations/operations/instagram/activate` cria a operação
+   (status=1, `source="instagram"`) e publica no MQTT
+   `{status, id_operation, search_text, user_id}` (sem token de usuário).
+2. `instagram-service` recebe, sobe o Chrome e busca no Google
+   `site:instagram.com <search_text>`, por até `MAX_PAGES` páginas.
+3. Extrai os handles dos resultados e grava tudo de uma vez com
+   `POST /leads/?user_id=...` (`X-Service-Key`).
+4. Não publica no RabbitMQ: não há mensagem a enviar nesse fluxo.
+
+### 4.4 Parar operação
+1. `PUT /automations/operations/{source}/deactivate` marca status=0 no banco e
+   publica MQTT `{status:0, id_operation}` no tópico da fonte. O front escolhe o
+   endpoint pelo campo `source` da operação.
+2. O serviço seta o `stop_event` da thread e encerra o navegador.
 
 ## 5. Mensageria
 
 | Bus | Quem publica | Quem consome | Tópico/Exchange | Conteúdo |
 |---|---|---|---|---|
 | MQTT (mosquitto) | backend | maps-service | tópico `prospect/maps` | comando ativar/desativar (sem token; só `user_id`) |
+| MQTT (mosquitto) | backend | instagram-service | tópico `prospect/instagram` | comando ativar/desativar (sem token; só `user_id`) |
 | RabbitMQ | maps-service | — (nenhum; fila retida) | exchange `fila_mensagens` (direct), routing `enviar` | `{ messages: [{ lead, message }] }` |
 
 ## 6. Autenticação e fluxo de credenciais (estado atual)

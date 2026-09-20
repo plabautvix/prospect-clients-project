@@ -18,6 +18,7 @@ class OperationsService:
             status=1,
             id_user=user_id,
             message_for_lead=data.message_for_lead,
+            source=data.source,
         )
 
     def update_status(self, operation_id: int, status: int):

@@ -13,6 +13,7 @@ class Operations(Base):
         operation_name (str): The name of the operation.
         search_text (str): The text used for searching.
         status (int): The status of the operation.
+        source (str): Which scraping service runs it ("maps" or "instagram").
     """
     __tablename__ = "operations"
 
@@ -22,3 +23,8 @@ class Operations(Base):
     message_for_lead: Mapped[str] = mapped_column(String, nullable=True)
     status: Mapped[int] = mapped_column(Integer, nullable=False)
     id_user: Mapped[int] = mapped_column(ForeignKey("user.id_person"), nullable=True)
+    # Tells the frontend which deactivate endpoint to call, so stopping an
+    # operation still works after a page reload.
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="maps", server_default="maps"
+    )

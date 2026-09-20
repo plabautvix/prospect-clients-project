@@ -8,13 +8,15 @@ class OperationsRepository:
         self.db = db
 
     def create(self, operation_name: str, search_text: str, status: int,
-               id_user: int, message_for_lead: str | None = None) -> Operations:
+               id_user: int, message_for_lead: str | None = None,
+               source: str = "maps") -> Operations:
         operation = Operations(
             operation_name=operation_name,
             search_text=search_text,
             status=status,
             id_user=id_user,
             message_for_lead=message_for_lead,
+            source=source,
         )
         self.db.add(operation)
         self.db.commit()

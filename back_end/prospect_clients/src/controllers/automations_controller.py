@@ -77,6 +77,63 @@ def send_message_stop_maps_service(
     return {"message": "Scraping process stopped"}
 
 
+@router.post(
+    "/operations/instagram/activate",
+    status_code=HTTPStatus.CREATED,
+    response_model=OperationResponse,
+    summary="Initiate lead discovery on Instagram via Google search",
+    description=(
+        "Creates an operation in the database and triggers the instagram service "
+        "via MQTT. The service queries Google for Instagram profiles matching the "
+        "search text and stores what it finds as leads."
+    ),
+)
+def start_instagram_search(
+    search_text: str,
+    title: str = None,
+    current_user: dict = Depends(get_current_user),
+    ops_service: OperationsService = Depends(_get_operations_service),
+):
+    operation = ops_service.create_operation(
+        OperationCreate(
+            operation_name=title or search_text,
+            search_text=search_text,
+            source="instagram",
+        ),
+        user_id=current_user["user_id"],
+    )
+
+    AutomationsService().activate_instagram_search(
+        search_text=search_text,
+        user_id=current_user["user_id"],
+        id_operation=operation.id_operation,
+    )
+
+    return operation
+
+
+@router.put(
+    "/operations/instagram/deactivate",
+    status_code=HTTPStatus.OK,
+    summary="Stop an Instagram search",
+    response_description="A confirmation message that the search has stopped.",
+)
+def stop_instagram_search(
+    id_operation: int,
+    current_user: dict = Depends(get_current_user),
+    ops_service: OperationsService = Depends(_get_operations_service),
+):
+    # Same idempotent pattern as maps: mark it stopped right away so the UI
+    # reflects it, without waiting for the service thread to tear down.
+    ops_service.mark_stopped(id_operation)
+
+    AutomationsService().deactivate_instagram_search(
+        id_operation=id_operation,
+        user_id=current_user["user_id"],
+    )
+    return {"message": "Instagram search stopped"}
+
+
 @router.get(
     "/leads",
     response_model=LeadsResponse,
