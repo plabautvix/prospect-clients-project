@@ -74,7 +74,6 @@ onBeforeUnmount(clearTimers)
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5-5 5M6 12h12" />
             </svg>
           </RouterLink>
-          <a href="#como-funciona" class="btn-secondary w-full px-7 py-3 text-base sm:w-auto">Ver como funciona</a>
         </div>
 
         <p class="mt-4 text-sm text-txt-secondary/70">
