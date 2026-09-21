@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useOperationsStore } from '@/stores/operations'
 
 const store = useOperationsStore()
@@ -85,6 +85,37 @@ async function stopOp(op) {
     stopping.value = null
   }
 }
+
+// Modal com os leads de uma operação
+const detail = ref(null)
+const detailLeads = ref([])
+const detailLoading = ref(false)
+const detailError = ref('')
+
+async function openDetail(op) {
+  detail.value = op
+  detailLeads.value = []
+  detailError.value = ''
+  detailLoading.value = true
+  try {
+    detailLeads.value = await store.fetchOperationLeads(op.id_operation)
+  } catch (e) {
+    detailError.value = e.response?.data?.detail || 'Erro ao carregar os leads.'
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function closeDetail() {
+  detail.value = null
+}
+
+function onDetailKeydown(e) {
+  if (e.key === 'Escape') closeDetail()
+}
+
+onMounted(() => document.addEventListener('keydown', onDetailKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onDetailKeydown))
 </script>
 
 <template>
@@ -218,18 +249,95 @@ async function stopOp(op) {
               <th class="pb-3 text-left font-medium text-txt-secondary">Fonte</th>
               <th class="pb-3 text-left font-medium text-txt-secondary">Busca</th>
               <th class="pb-3 text-left font-medium text-txt-secondary">Status</th>
+              <th class="pb-3"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-brd-light">
-            <tr v-for="op in inactiveOps" :key="op.id_operation">
+            <tr
+              v-for="op in inactiveOps"
+              :key="op.id_operation"
+              @click="openDetail(op)"
+              class="cursor-pointer transition hover:bg-surface-hover"
+            >
               <td class="py-3 font-medium text-txt-primary">{{ op.operation_name }}</td>
               <td class="py-3 text-txt-secondary">{{ sourceLabel(op.source) }}</td>
               <td class="py-3 text-txt-secondary">{{ op.search_text }}</td>
               <td class="py-3"><span class="badge-gray">Encerrada</span></td>
+              <td class="py-3 text-right text-xs text-brand">Ver leads</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
+
+    <!-- Modal: leads de uma operação -->
+    <Teleport to="body">
+      <div
+        v-if="detail"
+        @click.self="closeDetail"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      >
+        <div class="flex max-h-[85vh] w-full max-w-4xl flex-col rounded-2xl border border-brd-light bg-surface shadow-2xl">
+          <div class="flex items-start justify-between gap-4 border-b border-brd-light px-6 py-4">
+            <div class="min-w-0">
+              <h3 class="truncate font-semibold text-txt-primary">{{ detail.operation_name }}</h3>
+              <p class="mt-0.5 truncate text-xs text-txt-secondary/70">
+                {{ sourceLabel(detail.source) }} · {{ detail.search_text }}
+              </p>
+            </div>
+            <button @click="closeDetail" class="btn-secondary shrink-0 text-xs">Fechar</button>
+          </div>
+
+          <div class="min-h-0 flex-1 overflow-auto px-6 py-4">
+            <p v-if="detailLoading" class="py-10 text-center text-sm text-txt-secondary/60">
+              Carregando…
+            </p>
+
+            <p v-else-if="detailError" class="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400">
+              {{ detailError }}
+            </p>
+
+            <div v-else-if="detailLeads.length === 0" class="py-10 text-center">
+              <p class="text-sm text-txt-secondary/60">Nenhum lead vinculado a esta operação.</p>
+              <p class="mt-1 text-xs text-txt-secondary/40">
+                Operações anteriores a esta versão não registravam esse vínculo.
+              </p>
+            </div>
+
+            <table v-else class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-brd-light">
+                  <th class="pb-2 text-left font-medium text-txt-secondary">Nome</th>
+                  <th class="pb-2 text-left font-medium text-txt-secondary">Telefone</th>
+                  <th class="pb-2 text-left font-medium text-txt-secondary">Site</th>
+                  <th class="pb-2 text-left font-medium text-txt-secondary">Endereço</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-brd-light">
+                <tr v-for="lead in detailLeads" :key="lead.id_lead">
+                  <td class="py-2.5 font-medium text-txt-primary">{{ lead.nome }}</td>
+                  <td class="py-2.5 text-txt-secondary">{{ lead.telefone || '—' }}</td>
+                  <td class="py-2.5">
+                    <a
+                      v-if="lead.site"
+                      :href="lead.site.startsWith('http') ? lead.site : `https://${lead.site}`"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-brand hover:underline"
+                    >{{ lead.site }}</a>
+                    <span v-else class="text-txt-secondary">—</span>
+                  </td>
+                  <td class="py-2.5 text-txt-secondary">{{ lead.endereco || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-if="!detailLoading && detailLeads.length" class="border-t border-brd-light px-6 py-3 text-xs text-txt-secondary/60">
+            {{ detailLeads.length }} lead(s)
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

@@ -26,6 +26,7 @@ def list_leads(
     telefone: str | None = None,
     endereco: str | None = None,
     site: str | None = None,
+    origem: List[str] | None = Query(None),
     service: LeadsService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
 ):
@@ -38,6 +39,7 @@ def list_leads(
         telefone=telefone,
         endereco=endereco,
         site=site,
+        origem=origem,
     )
 
 
@@ -64,7 +66,8 @@ def list_categories(
 def create_leads(
     leads: List[LeadSchema],
     user_id: int,
+    operation_id: int | None = None,
     service: LeadsService = Depends(_get_service),
     _: bool = Depends(require_service),
 ):
-    return service.register_leads(leads, user_id)
+    return service.register_leads(leads, user_id, operation_id)

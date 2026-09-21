@@ -206,3 +206,86 @@ class TestLeadsEndpoints:
         data = response.json()
         # Distintas, sem None, ordenadas
         assert data == ["barbearia", "padaria"]
+
+
+class TestOperationLeads:
+    """GET /operations/{id}/leads: what a given run collected."""
+
+    def _login(self, client, email):
+        client.post("/users/", json={"email": email, "password": "pass"})
+        return client.post(
+            "/users/login", data={"username": email, "password": "pass"}
+        ).json()["access_token"]
+
+    def _user_id(self, db, email):
+        return UserRepository(db).get_by_email(email).id_person
+
+    def _create_operation(self, client, token, name="Run"):
+        response = client.post(
+            "/operations/",
+            json={"operation_name": name, "search_text": name, "source": "maps"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return response.json()["id_operation"]
+
+    def _post_leads(self, client, db, email, leads, operation_id=None):
+        from prospect_clients.src.configurations.auth import SERVICE_API_KEY
+
+        params = {"user_id": self._user_id(db, email)}
+        if operation_id is not None:
+            params["operation_id"] = operation_id
+        client.post(
+            "/leads/",
+            params=params,
+            json=leads,
+            headers={"X-Service-Key": SERVICE_API_KEY},
+        )
+
+    def test_returns_only_the_leads_of_that_operation(self, client, db):
+        email = "ops@test.com"
+        token = self._login(client, email)
+        first = self._create_operation(client, token, "Primeira")
+        second = self._create_operation(client, token, "Segunda")
+
+        self._post_leads(client, db, email, [{"nome": "Lead A"}], first)
+        self._post_leads(client, db, email, [{"nome": "Lead B"}], second)
+
+        response = client.get(
+            f"/operations/{first}/leads",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert [lead["nome"] for lead in response.json()] == ["Lead A"]
+
+    def test_leads_posted_without_an_operation_belong_to_none(self, client, db):
+        email = "noop@test.com"
+        token = self._login(client, email)
+        operation = self._create_operation(client, token)
+
+        self._post_leads(client, db, email, [{"nome": "Solto"}])
+
+        response = client.get(
+            f"/operations/{operation}/leads",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.json() == []
+
+    def test_another_user_cannot_read_the_run(self, client, db):
+        owner = "owner@test.com"
+        owner_token = self._login(client, owner)
+        operation = self._create_operation(client, owner_token)
+        self._post_leads(client, db, owner, [{"nome": "Privado"}], operation)
+
+        intruder_token = self._login(client, "intruder@test.com")
+        response = client.get(
+            f"/operations/{operation}/leads",
+            headers={"Authorization": f"Bearer {intruder_token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_requires_authentication(self, client):
+        assert client.get("/operations/1/leads").status_code in (401, 403)

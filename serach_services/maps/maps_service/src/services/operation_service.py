@@ -25,7 +25,11 @@ class OperationService:
             return
 
         stop_event = threading.Event()
-        lead_service = LeadService(user_id=user_id, message_template=message_text)
+        lead_service = LeadService(
+            user_id=user_id,
+            message_template=message_text,
+            operation_id=operation_id,
+        )
 
         def _run_and_finalize():
             scrape_maps(search_text, stop_event, lead_service.process_found_leads)

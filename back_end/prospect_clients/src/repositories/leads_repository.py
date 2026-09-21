@@ -18,15 +18,29 @@ class LeadsRepository:
         return self.db.query(Leads).filter(Leads.nome.in_(names)).all()
 
     def create_lead_history_entries(
-        self, user_id: int, lead_ids: list[int]
+        self, user_id: int, lead_ids: list[int], operation_id: int | None = None
     ) -> list[UserLeadHistory]:
         entries = [
-            UserLeadHistory(user_id=user_id, lead_id=lead_id)
+            UserLeadHistory(
+                user_id=user_id, lead_id=lead_id, id_operation=operation_id
+            )
             for lead_id in lead_ids
         ]
         self.db.add_all(entries)
         self.db.commit()
         return entries
+
+    def get_by_operation(self, operation_id: int, user_id: int) -> list[Leads]:
+        """Leads found by one operation, restricted to the user who owns it."""
+        return (
+            self.db.query(Leads)
+            .join(UserLeadHistory, UserLeadHistory.lead_id == Leads.id_lead)
+            .filter(UserLeadHistory.id_operation == operation_id)
+            .filter(UserLeadHistory.user_id == user_id)
+            .distinct()
+            .order_by(Leads.nome)
+            .all()
+        )
 
     def _filtered_query(
         self,
@@ -36,6 +50,7 @@ class LeadsRepository:
         telefone: str | None = None,
         endereco: str | None = None,
         site: str | None = None,
+        origem: list[str] | None = None,
     ):
         query = (
             self.db.query(Leads)
@@ -58,6 +73,10 @@ class LeadsRepository:
         if categoria:
             query = query.filter(Leads.categoria.in_(categoria))
 
+        # Origem: mesma ideia, "maps" e/ou "instagram"
+        if origem:
+            query = query.filter(Leads.origem.in_(origem))
+
         return query.distinct()
 
     def get_by_user(
@@ -70,6 +89,7 @@ class LeadsRepository:
         telefone: str | None = None,
         endereco: str | None = None,
         site: str | None = None,
+        origem: list[str] | None = None,
     ) -> tuple[list[Leads], int]:
         query = self._filtered_query(
             user_id,
@@ -78,6 +98,7 @@ class LeadsRepository:
             telefone=telefone,
             endereco=endereco,
             site=site,
+            origem=origem,
         )
         total = query.count()
         items = query.offset(skip).limit(limit).all()

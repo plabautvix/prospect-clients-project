@@ -16,6 +16,7 @@ class LeadsService:
         telefone: str | None = None,
         endereco: str | None = None,
         site: str | None = None,
+        origem: list[str] | None = None,
     ):
         items, total = self.repository.get_by_user(
             user_id,
@@ -26,13 +27,22 @@ class LeadsService:
             telefone=telefone,
             endereco=endereco,
             site=site,
+            origem=origem,
         )
         return {"items": items, "total": total, "skip": skip, "limit": limit}
 
     def get_categories(self, user_id: int) -> list[str]:
         return self.repository.get_distinct_categories(user_id)
 
-    def register_leads(self, leads: list[LeadSchema], user_id: int):
+    def get_leads_by_operation(self, operation_id: int, user_id: int):
+        return self.repository.get_by_operation(operation_id, user_id)
+
+    def register_leads(
+        self,
+        leads: list[LeadSchema],
+        user_id: int,
+        operation_id: int | None = None,
+    ):
         leads_data = [lead.model_dump(exclude={"id_lead"}) for lead in leads]
 
         if not leads_data:
@@ -47,6 +57,6 @@ class LeadsService:
             if lead.nome in lead_name_to_id
         ]
 
-        self.repository.create_lead_history_entries(user_id, lead_ids)
+        self.repository.create_lead_history_entries(user_id, lead_ids, operation_id)
 
         return persisted_leads

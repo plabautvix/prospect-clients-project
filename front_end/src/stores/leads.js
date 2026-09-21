@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/services/backend'
 
-const EMPTY_FILTERS = { nome: '', categoria: [], telefone: '', endereco: '', site: '' }
+const EMPTY_FILTERS = { nome: '', categoria: [], telefone: '', endereco: '', site: '', origem: [] }
 
 export const useLeadsStore = defineStore('leads', () => {
   const leads = ref([])

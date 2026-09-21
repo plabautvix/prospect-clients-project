@@ -4,8 +4,24 @@ import { useLeadsStore } from '@/stores/leads'
 
 const leadsStore = useLeadsStore()
 
+const SOURCES = [
+  { id: 'maps', label: 'Google Maps' },
+  { id: 'instagram', label: 'Instagram' },
+]
+
+function sourceLabel(id) {
+  return SOURCES.find((s) => s.id === id)?.label || 'Google Maps'
+}
+
+// Nenhuma fonte marcada significa todas, que é o estado inicial esperado.
+function toggleOrigem(id) {
+  const i = localFilters.origem.indexOf(id)
+  if (i === -1) localFilters.origem.push(id)
+  else localFilters.origem.splice(i, 1)
+}
+
 // Filtros locais (espelham os campos do servidor), aplicados com debounce
-const localFilters = reactive({ nome: '', categoria: [], telefone: '', endereco: '', site: '' })
+const localFilters = reactive({ nome: '', categoria: [], telefone: '', endereco: '', site: '', origem: [] })
 
 // Multiselect de categoria — painel é teleportado para o body para escapar
 // dos stacking contexts dos cards (backdrop-filter cria contexto próprio).
@@ -79,7 +95,12 @@ watch(
   () => {
     clearTimeout(debounceTimer)
     debounceTimer = setTimeout(
-      () => leadsStore.setFilters({ ...localFilters, categoria: [...localFilters.categoria] }),
+      () =>
+        leadsStore.setFilters({
+          ...localFilters,
+          categoria: [...localFilters.categoria],
+          origem: [...localFilters.origem],
+        }),
       300
     )
   },
@@ -141,6 +162,28 @@ function toggle(lead) {
     <!-- Filtros -->
     <div class="card">
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <label class="label">Fonte</label>
+          <div class="flex gap-2">
+            <button
+              v-for="s in SOURCES"
+              :key="s.id"
+              type="button"
+              @click="toggleOrigem(s.id)"
+              :class="[
+                'flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition',
+                localFilters.origem.includes(s.id)
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              {{ s.label }}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-txt-secondary/50">
+            {{ localFilters.origem.length === 0 ? 'Mostrando todas as fontes' : 'Filtrando' }}
+          </p>
+        </div>
         <div>
           <label class="label">Nome</label>
           <input v-model="localFilters.nome" type="text" placeholder="Buscar por nome…" class="input" />
@@ -283,6 +326,16 @@ function toggle(lead) {
                     {{ lead.nome?.[0]?.toUpperCase() }}
                   </div>
                   <span class="font-medium text-txt-primary">{{ lead.nome }}</span>
+                  <span
+                    :class="[
+                      'ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                      lead.origem === 'instagram'
+                        ? 'bg-pink-500/10 text-pink-400'
+                        : 'bg-sky-500/10 text-sky-400',
+                    ]"
+                  >
+                    {{ sourceLabel(lead.origem) }}
+                  </span>
                 </div>
               </td>
               <td class="px-4 py-3 text-[#a1a8a4]">

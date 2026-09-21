@@ -29,6 +29,11 @@ export const useOperationsStore = defineStore('operations', () => {
     return { serach_text: searchText, message_user: messageUser, title }
   }
 
+  async function fetchOperationLeads(id) {
+    const { data } = await api.get(`/operations/${id}/leads`)
+    return data
+  }
+
   async function startOperation(source, payload) {
     const { data } = await api.post(`/automations/operations/${source}/activate`, null, {
       params: activateParams(source, payload),
@@ -53,5 +58,13 @@ export const useOperationsStore = defineStore('operations', () => {
     }
   }
 
-  return { operations, loading, error, fetchOperations, startOperation, stopOperation }
+  return {
+    operations,
+    loading,
+    error,
+    fetchOperations,
+    fetchOperationLeads,
+    startOperation,
+    stopOperation,
+  }
 })

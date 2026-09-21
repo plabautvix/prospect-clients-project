@@ -10,9 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class LeadService:
-    def __init__(self, user_id: int, message_template: str):
+    def __init__(
+        self, user_id: int, message_template: str,
+        operation_id: int | None = None,
+    ):
         self._user_id = user_id
         self._message_template = message_template
+        self._operation_id = operation_id
         self._publisher = RabbitMQPublisher()
 
     def process_found_leads(self, leads: list[dict]):
@@ -29,7 +33,13 @@ class LeadService:
         }
         try:
             response = requests.post(
-                url, json=leads, params={"user_id": self._user_id}, headers=headers
+                url,
+                json=leads,
+                params={
+                    "user_id": self._user_id,
+                    "operation_id": self._operation_id,
+                },
+                headers=headers,
             )
             if response.status_code == 201:
                 logger.info("Leads inserted successfully (%d leads)", len(leads))

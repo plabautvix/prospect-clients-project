@@ -17,6 +17,7 @@ class Leads(Base):
         endereco (str): The address of the lead.
         site (str): The website of the lead.
         foto (str): The photo URL of the lead.
+        origem (str): Which service found it ("maps" or "instagram").
     """
     __tablename__ = "leads"
     id_lead: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -26,6 +27,9 @@ class Leads(Base):
     site: Mapped[str] = mapped_column(String(255), nullable=True)
     foto: Mapped[str] = mapped_column(String(255), nullable=True)
     categoria: Mapped[str] = mapped_column(String(100), nullable=True)
+    origem: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="maps", server_default="maps"
+    )
 
 
 class UserLeadHistory(Base):
@@ -35,3 +39,7 @@ class UserLeadHistory(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id_person"), nullable=False)
     lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id_lead"), nullable=False)
     encontrado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Which run found it. Null for rows written before this was recorded.
+    id_operation: Mapped[int] = mapped_column(
+        ForeignKey("operations.id_operation"), nullable=True
+    )

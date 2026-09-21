@@ -16,11 +16,13 @@ TIMEOUT = 30
 HEADERS = {"X-Service-Key": config.SERVICE_API_KEY}
 
 
-def post_leads(leads: list[dict], user_id: int) -> None:
+def post_leads(
+    leads: list[dict], user_id: int, operation_id: int | None = None
+) -> None:
     response = requests.post(
         f"{config.BACKEND_API_URL}/leads/",
         json=leads,
-        params={"user_id": user_id},
+        params={"user_id": user_id, "operation_id": operation_id},
         headers=HEADERS,
         timeout=TIMEOUT,
     )

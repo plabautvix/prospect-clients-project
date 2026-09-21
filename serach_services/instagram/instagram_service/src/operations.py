@@ -10,7 +10,7 @@ import logging
 import threading
 
 import backend
-from search import Blocked, GoogleSearch
+from search import GoogleSearch
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,16 @@ class Operations:
         with self._lock:
             if operation_id in self._running:
                 logger.warning("operation %d is already running", operation_id)
+                return
+            if self._running:
+                # Every operation drives the same Chrome profile, so a second
+                # browser would fight the first one over it.
+                logger.warning(
+                    "operation %d refused: %s already running",
+                    operation_id,
+                    sorted(self._running),
+                )
+                backend.update_operation_status(operation_id, status=0)
                 return
             self._running[operation_id] = stop_event
 
@@ -58,23 +68,22 @@ class Operations:
     def _run(self, operation_id, user_id, search_text, stop_event) -> None:
         # nodriver is async, so each operation thread gets its own event loop.
         try:
-            asyncio.run(self._search(user_id, search_text, stop_event))
+            asyncio.run(
+                self._search(operation_id, user_id, search_text, stop_event)
+            )
         finally:
             with self._lock:
                 self._running.pop(operation_id, None)
             self._mark_stopped(operation_id)
             logger.info("operation %d finished", operation_id)
 
-    async def _search(self, user_id, search_text, stop_event) -> None:
+    async def _search(self, operation_id, user_id, search_text, stop_event) -> None:
         search = GoogleSearch()
         await search.start()
         try:
             profiles = await search.find_profiles(
                 build_query(search_text), should_stop=stop_event.is_set
             )
-        except Blocked as error:
-            logger.warning("blocked by Google, nothing collected: %s", error)
-            return
         finally:
             await search.stop()
 
@@ -82,7 +91,7 @@ class Operations:
             logger.info("no profiles found for %r", search_text)
             return
 
-        backend.post_leads(to_leads(profiles, search_text), user_id)
+        backend.post_leads(to_leads(profiles, search_text), user_id, operation_id)
 
     def _mark_stopped(self, operation_id: int) -> None:
         # Best effort: if the backend is down, the operation stays active in the
@@ -110,6 +119,7 @@ def to_leads(profiles: dict, search_text: str) -> list[dict]:
             "nome": f"@{handle}",
             "site": result.url,
             "categoria": search_text[:CATEGORY_LIMIT],
+            "origem": "instagram",
         }
         for handle, result in profiles.items()
     ]

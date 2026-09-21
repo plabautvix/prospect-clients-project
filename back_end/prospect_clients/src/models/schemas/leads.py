@@ -9,6 +9,10 @@ class LeadSchema(BaseModel):
     site: Optional[str] = Field(None, description="The website of the lead.")
     foto: Optional[str] = Field(None, description="The photo URL of the lead.")
     categoria: Optional[str] = Field(None, description="The category of the lead.")
+    origem: str = Field(
+        "maps",
+        description="Which service found the lead: 'maps' or 'instagram'.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -18,7 +22,8 @@ class LeadSchema(BaseModel):
                 "endereco": "123 Example St, City, Country",
                 "site": "https://www.example.com",
                 "foto": "https://www.example.com/photo.jpg",
-                "categoria": "Example Category"
+                "categoria": "Example Category",
+                "origem": "maps"
             }
         }
     }

@@ -11,7 +11,7 @@ class TestLeadService:
         mock_response.status_code = 201
         mock_requests.post.return_value = mock_response
 
-        service = LeadService(user_id=5, message_template="Oi {nome}")
+        service = LeadService(user_id=5, message_template="Oi {nome}", operation_id=9)
         leads = [{"nome": "Lead A", "telefone": "+55111"}]
 
         service.process_found_leads(leads)
@@ -21,7 +21,20 @@ class TestLeadService:
         assert call_args[1]["json"] == leads
         # Authenticates with the service key, not a user token; user_id is passed along.
         assert "X-Service-Key" in call_args[1]["headers"]
-        assert call_args[1]["params"] == {"user_id": 5}
+        # operation_id ties each lead back to the run that found it.
+        assert call_args[1]["params"] == {"user_id": 5, "operation_id": 9}
+
+    @patch("services.lead_service.RabbitMQPublisher")
+    @patch("services.lead_service.requests")
+    def test_operation_id_is_optional(self, mock_requests, mock_rmq_cls):
+        mock_requests.post.return_value = MagicMock(status_code=201)
+
+        LeadService(user_id=5, message_template="Oi").process_found_leads(
+            [{"nome": "Lead A"}]
+        )
+
+        params = mock_requests.post.call_args[1]["params"]
+        assert params == {"user_id": 5, "operation_id": None}
 
     @patch("services.lead_service.RabbitMQPublisher")
     @patch("services.lead_service.requests")
