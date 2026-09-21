@@ -2,6 +2,7 @@ import pytest
 
 from serp import (
     SearchResult,
+    handle_from_cite,
     handle_from_title,
     handle_from_url,
     instagram_handle,
@@ -171,3 +172,72 @@ def test_live_layout_still_extracts_the_snippet():
 
     assert "Atendimento veterinario 24 horas" in first.snippet
     assert "Oncovida" not in first.snippet
+
+
+# Real breadcrumbs, as Google renders them under the title.
+@pytest.mark.parametrize(
+    "cite,expected",
+    [
+        ("https://www.instagram.com › psicologapamelasoaltoe", "psicologapamelasoaltoe"),
+        ("instagram.com › psi.danielalino", "psi.danielalino"),
+        ("https://www.instagram.com/clinicacontinuar", "clinicacontinuar"),
+        ("https://www.instagram.com › p › C9xYz", None),
+        ("https://clinicaveterinaria.com.br › equipe", None),
+        ("", None),
+    ],
+)
+def test_handle_from_cite(cite, expected):
+    assert handle_from_cite(cite) == expected
+
+
+def test_truncated_title_falls_back_to_the_breadcrumb():
+    # Google cuts long titles and takes the "(@handle)" with them. The
+    # breadcrumb is rendered separately and survives.
+    result = SearchResult(
+        title="Inêz Torres I Psicanalista, Psicóloga CRP.16-ES 437, ...",
+        url="",
+        snippet="Atendimento em Vitória",
+        cite="https://www.instagram.com › inez.torres.psi",
+    )
+
+    assert instagram_handle(result) == "inez.torres.psi"
+
+
+def test_loose_handle_is_the_last_resort():
+    result = SearchResult(
+        title="Psicóloga em Vitória - atendimento online",
+        url="",
+        snippet="Agende pelo direct @psi.vitoria.es",
+        cite="",
+    )
+
+    assert instagram_handle(result) == "psi.vitoria.es"
+
+
+def test_a_result_with_no_handle_anywhere_is_dropped():
+    result = SearchResult(
+        title="Conselho Regional de Psicologia",
+        url="",
+        snippet="Registro profissional e orientações",
+        cite="https://crp16.org.br › institucional",
+    )
+
+    assert instagram_handle(result) is None
+
+
+def test_the_breadcrumb_is_extracted_from_the_live_layout():
+    html = """
+    <div><div><div>
+      <a href="/goto?url=CAESZAHrOzAV"><span>
+        <h3>Título muito longo que o Google cortou, ...</h3>
+        <div><cite>https://www.instagram.com › psi.cortada</cite></div>
+      </span></a>
+      <div>Um snippet com tamanho suficiente para ser aceito aqui.</div>
+    </div></div></div>
+    """
+    result = parse_results(html)[0]
+
+    assert result.cite == "https://www.instagram.com › psi.cortada"
+    assert instagram_handle(result) == "psi.cortada"
+    # The breadcrumb lives inside the anchor and must not leak into the snippet.
+    assert "instagram.com" not in result.snippet

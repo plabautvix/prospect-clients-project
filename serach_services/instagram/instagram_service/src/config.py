@@ -13,7 +13,10 @@ HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
 
 # Seconds to wait between queries.
 SEARCH_DELAY = float(os.getenv("SEARCH_DELAY", "6"))
-MAX_PAGES = int(os.getenv("MAX_PAGES", "3"))
+
+# Safety ceiling, not the real stop. A run normally ends when Google stops
+# offering a next page. Around 11s per page, so 20 pages is roughly 4 minutes.
+MAX_PAGES = int(os.getenv("MAX_PAGES", "20"))
 
 # ─── MQTT ───────────────────────────────────────────────────────────────────
 

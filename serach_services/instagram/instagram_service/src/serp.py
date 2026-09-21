@@ -17,6 +17,15 @@ RESERVED_PATHS = {"p", "reel", "reels", "tv", "explore", "stories", "accounts"}
 # /goto?url=<blob> redirect that carries no readable URL.
 TITLE_HANDLE = re.compile(r"\(@([A-Za-z0-9._]{1,30})\)")
 
+# "https://www.instagram.com › handle" and the flat "instagram.com/handle".
+CITE_HANDLE = re.compile(
+    r"instagram\.com\s*(?:›|>|/)\s*([A-Za-z0-9._]{1,30})", re.IGNORECASE
+)
+
+# A bare "@handle" anywhere in the text. Last resort: a caption can mention
+# someone else's handle, so this only runs when nothing better matched.
+LOOSE_HANDLE = re.compile(r"@([A-Za-z0-9._]{2,30})")
+
 # Checked against the final URL only. A real results page mentions /sorry/
 # inside its scripts, so looking for these in the body matches every page.
 BLOCK_URL_MARKERS = ("/sorry/", "/httpservice/retry")
@@ -41,6 +50,10 @@ class SearchResult:
     title: str
     url: str
     snippet: str
+    # The breadcrumb Google shows under the title, like
+    # "https://www.instagram.com › handle". It is the readable form of a link
+    # whose href is an opaque redirect, and it survives a truncated title.
+    cite: str = ""
 
 
 def parse_results(page_html: str) -> list[SearchResult]:
@@ -77,10 +90,24 @@ def parse_results(page_html: str) -> list[SearchResult]:
         seen.add(key)
 
         results.append(
-            SearchResult(title=title, url=url, snippet=find_snippet(anchor))
+            SearchResult(
+                title=title,
+                url=url,
+                snippet=find_snippet(anchor),
+                cite=find_cite(anchor),
+            )
         )
 
     return results
+
+
+def find_cite(anchor) -> str:
+    """The breadcrumb Google renders under the title, if it is there."""
+    for cite in anchor.iter("cite"):
+        text = normalize(cite.text_content())
+        if text:
+            return text
+    return ""
 
 
 def is_blocked(url: str, page_html: str) -> bool:
@@ -109,11 +136,17 @@ def is_blocked(url: str, page_html: str) -> bool:
 def instagram_handle(result: SearchResult) -> str | None:
     """Return the Instagram handle of a result, or None if it is not a profile.
 
-    The URL is tried first, then the title. Google no longer exposes the target
-    URL on result anchors: it wraps them in /goto?url=<opaque blob>, so on a
-    live page the title is usually the only readable source.
+    Four sources, most trustworthy first. Google no longer exposes the target
+    URL on result anchors (it wraps them in /goto?url=<opaque blob>), and it
+    truncates long titles, dropping the "(@handle)" with them. Any single
+    source loses results, so they back each other up.
     """
-    return handle_from_url(result.url) or handle_from_title(result.title)
+    return (
+        handle_from_url(result.url)
+        or handle_from_title(result.title)
+        or handle_from_cite(result.cite)
+        or handle_from_loose_text(result.title, result.snippet)
+    )
 
 
 def handle_from_url(url: str) -> str | None:
@@ -130,6 +163,30 @@ def handle_from_title(title: str) -> str | None:
         return None
     handle = match.group(1).lower()
     return None if handle in RESERVED_PATHS else handle
+
+
+def handle_from_cite(cite: str) -> str | None:
+    """Read the handle off the breadcrumb under the title.
+
+    This is what rescues a result whose title Google cut short, since the
+    breadcrumb is rendered separately and keeps the first path segment.
+    """
+    match = CITE_HANDLE.search(cite or "")
+    if not match:
+        return None
+    handle = match.group(1).lower()
+    return None if handle in RESERVED_PATHS else handle
+
+
+def handle_from_loose_text(*texts: str) -> str | None:
+    """Last resort: a bare @handle in the title or snippet."""
+    for text in texts:
+        match = LOOSE_HANDLE.search(text or "")
+        if match:
+            handle = match.group(1).lower()
+            if handle not in RESERVED_PATHS:
+                return handle
+    return None
 
 
 def profile_url(handle: str) -> str:

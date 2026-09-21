@@ -14,17 +14,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from search import Blocked, GoogleSearch  # noqa: E402
+from search import GoogleSearch  # noqa: E402
 
 
 async def run(args) -> int:
     search = GoogleSearch(headless=args.headless)
     await search.start()
     try:
+        # A block part way through is not fatal: find_profiles keeps whatever
+        # the earlier pages returned and logs a warning.
         profiles = await search.find_profiles(args.query, pages=args.pages)
-    except Blocked as error:
-        print(f"blocked by Google: {error}")
-        return 2
     finally:
         if args.dump and search.last_html:
             Path("dumps").mkdir(exist_ok=True)
