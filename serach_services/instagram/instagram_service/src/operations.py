@@ -23,7 +23,10 @@ class Operations:
         self._running: dict[int, threading.Event] = {}
         self._lock = threading.Lock()
 
-    def start(self, operation_id: int, user_id: int, search_text: str) -> None:
+    def start(
+        self, operation_id: int, user_id: int, search_text: str,
+        limit: int | None = None,
+    ) -> None:
         stop_event = threading.Event()
 
         with self._lock:
@@ -44,7 +47,7 @@ class Operations:
 
         threading.Thread(
             target=self._run,
-            args=(operation_id, user_id, search_text, stop_event),
+            args=(operation_id, user_id, search_text, stop_event, limit),
             name=f"ig-search-{operation_id}",
             daemon=True,
         ).start()
@@ -65,11 +68,13 @@ class Operations:
         # leave an operation marked active forever.
         self._mark_stopped(operation_id)
 
-    def _run(self, operation_id, user_id, search_text, stop_event) -> None:
+    def _run(self, operation_id, user_id, search_text, stop_event, limit) -> None:
         # nodriver is async, so each operation thread gets its own event loop.
         try:
             asyncio.run(
-                self._search(operation_id, user_id, search_text, stop_event)
+                self._search(
+                    operation_id, user_id, search_text, stop_event, limit
+                )
             )
         finally:
             with self._lock:
@@ -77,7 +82,9 @@ class Operations:
             self._mark_stopped(operation_id)
             logger.info("operation %d finished", operation_id)
 
-    async def _search(self, operation_id, user_id, search_text, stop_event) -> None:
+    async def _search(
+        self, operation_id, user_id, search_text, stop_event, limit
+    ) -> None:
         search = GoogleSearch()
         try:
             # start() is inside the try on purpose: a launch that fails half way
@@ -86,7 +93,9 @@ class Operations:
             # the profile and broke every run after it.
             await search.start()
             profiles = await search.find_profiles(
-                build_query(search_text), should_stop=stop_event.is_set
+                build_query(search_text),
+                should_stop=stop_event.is_set,
+                limit=limit,
             )
         finally:
             await search.stop()

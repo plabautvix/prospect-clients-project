@@ -21,6 +21,7 @@ class AutomationsService:
     def activate_maps_scraping(
         self, search_text: str, message_user: str, user_id: int,
         id_operation: int, title: str | None = None,
+        limit: int | None = None,
     ) -> dict:
         # No user token is sent: the maps-service authenticates to the backend
         # with its own service credential (X-Service-Key).
@@ -33,6 +34,7 @@ class AutomationsService:
                 "title": title,
                 "user_id": user_id,
                 "message_user": message_user,
+                "limit": limit,
             },
         )
         return {"message": "Scraping process started"}
@@ -52,6 +54,7 @@ class AutomationsService:
 
     def activate_instagram_search(
         self, search_text: str, user_id: int, id_operation: int,
+        limit: int | None = None,
     ) -> dict:
         publish_message(
             "prospect/instagram",
@@ -60,6 +63,7 @@ class AutomationsService:
                 "id_operation": id_operation,
                 "search_text": search_text,
                 "user_id": user_id,
+                "limit": limit,
             },
         )
         return {"message": "Instagram search started"}

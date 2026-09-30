@@ -23,11 +23,11 @@ export const useOperationsStore = defineStore('operations', () => {
   // The two endpoints spell the parameter differently. The message template is
   // no longer sent: the backend keeps a default, since nothing consumes the
   // queue yet.
-  function activateParams(source, { searchText, title }) {
+  function activateParams(source, { searchText, title, limit }) {
     if (source === 'instagram') {
-      return { search_text: searchText, title }
+      return { search_text: searchText, title, limit }
     }
-    return { serach_text: searchText, title }
+    return { serach_text: searchText, title, limit }
   }
 
   async function fetchOperationLeads(id) {

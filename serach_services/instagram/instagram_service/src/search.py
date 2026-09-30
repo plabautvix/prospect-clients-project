@@ -117,6 +117,7 @@ class GoogleSearch:
         query: str,
         pages: int = config.MAX_PAGES,
         should_stop=None,
+        limit: int | None = None,
     ) -> dict[str, SearchResult]:
         """Search and keep only Instagram profiles, by handle.
 
@@ -200,6 +201,8 @@ class GoogleSearch:
                     snippet=result.snippet,
                     cite=result.cite,
                 )
+                if limit and len(profiles) >= limit:
+                    break
 
             logger.info(
                 "page %d: %d results, %d new, %d repeated, %d without handle",
@@ -210,6 +213,10 @@ class GoogleSearch:
                 len(results) - new - duplicates,
             )
             page += 1
+
+            if limit and len(profiles) >= limit:
+                logger.info("reached the requested limit of %d profiles", limit)
+                break
 
         logger.info(
             "finished with %d profiles after %d pages", len(profiles), page

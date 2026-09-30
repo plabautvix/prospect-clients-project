@@ -72,12 +72,15 @@ const UFS = [
   { sigla: 'TO', nome: 'Tocantins' },
 ]
 
+const LIMIT_PRESETS = [50, 100, 250, 500]
+
 const source = ref('maps')
 const entityType = ref('pessoa')
 const subject = ref('')
 const limitRegion = ref(true)
 const uf = ref('')
 const city = ref('')
+const limit = ref(100)
 const title = ref('')
 const formError = ref('')
 const formSuccess = ref('')
@@ -137,6 +140,7 @@ async function startOp() {
     await store.startOperation(source.value, {
       searchText: query.value,
       title: title.value.trim() || null,
+      limit: limit.value || null,
     })
     formSuccess.value = 'Operação iniciada! Os leads serão coletados em breve.'
     subject.value = ''
@@ -262,6 +266,49 @@ onUnmounted(() => document.removeEventListener('keydown', onDetailKeydown))
             <label class="label">Título da operação (opcional)</label>
             <input v-model="title" type="text" placeholder="Ex: Vets Vitória" class="input" />
           </div>
+        </div>
+
+        <div>
+          <label class="label">Quantos leads buscar</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              v-model.number="limit"
+              type="number"
+              min="1"
+              placeholder="Sem limite"
+              class="input w-36"
+            />
+            <button
+              v-for="n in LIMIT_PRESETS"
+              :key="n"
+              type="button"
+              @click="limit = n"
+              :class="[
+                'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
+                limit === n
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              {{ n }}
+            </button>
+            <button
+              type="button"
+              @click="limit = null"
+              :class="[
+                'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
+                !limit
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              Sem limite
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-txt-secondary/60">
+            A operação encerra ao atingir esse número. Sem limite, ela vai até
+            esgotar os resultados.
+          </p>
         </div>
 
         <div>

@@ -24,7 +24,10 @@ def _get_firefox_options() -> Options:
     return options
 
 
-def scrape_maps(search_text: str, stop_event: threading.Event, on_leads_found: callable):
+def scrape_maps(
+    search_text: str, stop_event: threading.Event, on_leads_found: callable,
+    limit: int | None = None,
+):
     options = _get_firefox_options()
     driver = webdriver.Firefox(options=options)
 
@@ -42,6 +45,7 @@ def scrape_maps(search_text: str, stop_event: threading.Event, on_leads_found: c
         time.sleep(5)
 
         seen_hrefs: set[str] = set()
+        collected = 0
         empty_rounds = 0
         max_empty_rounds = 5
 
@@ -60,8 +64,15 @@ def scrape_maps(search_text: str, stop_event: threading.Event, on_leads_found: c
                 process_leads(driver, new_results, entities, seen_hrefs)
 
                 if entities:
+                    # Trim the batch so the run never overshoots what was asked.
+                    if limit:
+                        entities = entities[: limit - collected]
                     on_leads_found(entities)
+                    collected += len(entities)
                     empty_rounds = 0
+                    if limit and collected >= limit:
+                        logger.info("Reached the requested limit of %d leads", limit)
+                        break
                 else:
                     empty_rounds += 1
                     logger.info("No new leads found (round %d/%d)", empty_rounds, max_empty_rounds)

@@ -35,6 +35,7 @@ def on_message(client, userdata, msg):
                 user_id=payload.get("user_id"),
                 title=payload.get("title"),
                 operation_id=payload.get("id_operation"),
+                limit=payload.get("limit"),
             )
         else:
             _operation_service.stop_operation(

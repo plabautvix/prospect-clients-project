@@ -34,6 +34,7 @@ def send_message_maps_service(
     serach_text: str,
     message_user: str = DEFAULT_LEAD_MESSAGE,
     title: str = None,
+    limit: int | None = None,
     current_user: dict = Depends(get_current_user),
     ops_service: OperationsService = Depends(_get_operations_service),
 ):
@@ -54,6 +55,7 @@ def send_message_maps_service(
         user_id=current_user["user_id"],
         id_operation=operation.id_operation,
         title=title,
+        limit=limit,
     )
 
     return operation
@@ -97,6 +99,7 @@ def send_message_stop_maps_service(
 def start_instagram_search(
     search_text: str,
     title: str = None,
+    limit: int | None = None,
     current_user: dict = Depends(get_current_user),
     ops_service: OperationsService = Depends(_get_operations_service),
 ):
@@ -113,6 +116,7 @@ def start_instagram_search(
         search_text=search_text,
         user_id=current_user["user_id"],
         id_operation=operation.id_operation,
+        limit=limit,
     )
 
     return operation

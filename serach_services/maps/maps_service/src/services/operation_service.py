@@ -18,6 +18,7 @@ class OperationService:
     def start_operation(
         self, search_text: str, message_text: str, user_id: int,
         operation_id: int | None = None, title: str | None = None,
+        limit: int | None = None,
     ):
         # The operation is always created by the backend, which sends its id here.
         if operation_id is None:
@@ -32,7 +33,10 @@ class OperationService:
         )
 
         def _run_and_finalize():
-            scrape_maps(search_text, stop_event, lead_service.process_found_leads)
+            scrape_maps(
+                search_text, stop_event, lead_service.process_found_leads,
+                limit=limit,
+            )
             with self._lock:
                 self._active_operations.pop(operation_id, None)
             self._update_operation_status_via_api(operation_id, status=0)

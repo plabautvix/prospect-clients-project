@@ -2,7 +2,8 @@
 
 Payload published by the backend on `prospect/instagram`:
 
-    {"status": 1, "id_operation": 42, "user_id": 7, "search_text": "..."}
+    {"status": 1, "id_operation": 42, "user_id": 7, "search_text": "...",
+     "limit": 100}
     {"status": 0, "id_operation": 42}
 
 No secret travels in the payload. The service authenticates to the backend with
@@ -44,6 +45,7 @@ def on_message(client, userdata, message):
             operation_id=operation_id,
             user_id=payload["user_id"],
             search_text=payload["search_text"],
+            limit=payload.get("limit"),
         )
     else:
         operations.stop(operation_id)

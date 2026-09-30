@@ -59,6 +59,7 @@ class TestAutomationsService:
                 "id_operation": 7,
                 "search_text": "medica veterinaria em Campinas",
                 "user_id": 1,
+                "limit": None,
             },
         )
         # The user token must NOT be propagated to the instagram-service.
@@ -74,6 +75,14 @@ class TestAutomationsService:
             "prospect/instagram",
             {"status": 0, "id_operation": 42, "user_id": 1},
         )
+
+    @patch("prospect_clients.src.services.automations_service.publish_message")
+    def test_the_lead_limit_reaches_the_service(self, mock_publish):
+        AutomationsService().activate_instagram_search(
+            search_text="psicologa", user_id=1, id_operation=7, limit=250
+        )
+
+        assert mock_publish.call_args[0][1]["limit"] == 250
 
 
 class TestAutomationsEndpoints:

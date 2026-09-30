@@ -42,6 +42,7 @@ class TestOnMessage:
             user_id=1,
             title="Padarias",
             operation_id=7,
+            limit=None,
         )
 
     @patch("messaging.mqtt_handler._operation_service")
@@ -68,3 +69,29 @@ class TestOnMessage:
 
         mock_service.start_operation.assert_not_called()
         mock_service.stop_operation.assert_not_called()
+
+
+def test_the_lead_limit_reaches_the_operation(monkeypatch):
+    """A limit in the payload is handed to the operation that will honour it."""
+    from unittest.mock import MagicMock
+
+    import messaging.mqtt_handler as handler
+
+    service = MagicMock()
+    monkeypatch.setattr(handler, "_operation_service", service)
+
+    message = MagicMock()
+    message.payload = json.dumps(
+        {
+            "status": 1,
+            "id_operation": 7,
+            "user_id": 1,
+            "search_text": "padarias SP",
+            "message_user": "Ola",
+            "limit": 250,
+        }
+    ).encode()
+
+    handler.on_message(None, None, message)
+
+    assert service.start_operation.call_args[1]["limit"] == 250
