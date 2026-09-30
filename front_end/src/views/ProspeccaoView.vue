@@ -8,24 +8,76 @@ const SOURCES = [
   {
     id: 'maps',
     label: 'Google Maps',
-    searchLabel: 'Busca no Google Maps',
-    placeholder: 'Ex: barbearias em São Paulo',
-    titlePlaceholder: 'Ex: Barbearias SP',
     hint: 'Coleta nome, telefone, endereço e site dos negócios encontrados.',
   },
   {
     id: 'instagram',
     label: 'Instagram',
-    searchLabel: 'Perfil que você procura',
-    placeholder: 'Ex: médica veterinária em Campinas',
-    titlePlaceholder: 'Ex: Vets Campinas',
-    hint: 'Busca perfis pelo índice do Google. Não acessa o Instagram e não envia mensagem.',
+    hint: 'Busca perfis pelo índice do Google. Não acessa o Instagram.',
   },
 ]
 
+// O tipo guia o rótulo, o exemplo e as sugestões do campo principal. É ali que
+// a busca costuma sair errada: "veterinária" traz clínica e profissional
+// misturadas, enquanto "médica veterinária" e "clínica veterinária" separam.
+const ENTITY_TYPES = [
+  {
+    id: 'pessoa',
+    label: 'Pessoa física',
+    subjectLabel: 'Profissão',
+    placeholder: 'Ex: médica veterinária',
+    suggestions: [
+      'médica veterinária',
+      'psicóloga',
+      'advogado',
+      'nutricionista',
+      'arquiteta',
+      'dentista',
+      'fisioterapeuta',
+      'personal trainer',
+    ],
+  },
+  {
+    id: 'empresa',
+    label: 'Empresa',
+    subjectLabel: 'Ramo de atuação',
+    placeholder: 'Ex: clínica veterinária',
+    suggestions: [
+      'clínica veterinária',
+      'pet shop',
+      'escritório de advocacia',
+      'academia',
+      'restaurante',
+      'barbearia',
+      'imobiliária',
+      'loja de roupas',
+    ],
+  },
+]
+
+const UFS = [
+  { sigla: 'AC', nome: 'Acre' }, { sigla: 'AL', nome: 'Alagoas' },
+  { sigla: 'AP', nome: 'Amapá' }, { sigla: 'AM', nome: 'Amazonas' },
+  { sigla: 'BA', nome: 'Bahia' }, { sigla: 'CE', nome: 'Ceará' },
+  { sigla: 'DF', nome: 'Distrito Federal' }, { sigla: 'ES', nome: 'Espírito Santo' },
+  { sigla: 'GO', nome: 'Goiás' }, { sigla: 'MA', nome: 'Maranhão' },
+  { sigla: 'MT', nome: 'Mato Grosso' }, { sigla: 'MS', nome: 'Mato Grosso do Sul' },
+  { sigla: 'MG', nome: 'Minas Gerais' }, { sigla: 'PA', nome: 'Pará' },
+  { sigla: 'PB', nome: 'Paraíba' }, { sigla: 'PR', nome: 'Paraná' },
+  { sigla: 'PE', nome: 'Pernambuco' }, { sigla: 'PI', nome: 'Piauí' },
+  { sigla: 'RJ', nome: 'Rio de Janeiro' }, { sigla: 'RN', nome: 'Rio Grande do Norte' },
+  { sigla: 'RS', nome: 'Rio Grande do Sul' }, { sigla: 'RO', nome: 'Rondônia' },
+  { sigla: 'RR', nome: 'Roraima' }, { sigla: 'SC', nome: 'Santa Catarina' },
+  { sigla: 'SP', nome: 'São Paulo' }, { sigla: 'SE', nome: 'Sergipe' },
+  { sigla: 'TO', nome: 'Tocantins' },
+]
+
 const source = ref('maps')
-const searchText = ref('')
-const messageTemplate = ref('Olá {nome}! Vi seu negócio e gostaria de apresentar uma oportunidade.')
+const entityType = ref('pessoa')
+const subject = ref('')
+const limitRegion = ref(true)
+const uf = ref('')
+const city = ref('')
 const title = ref('')
 const formError = ref('')
 const formSuccess = ref('')
@@ -37,7 +89,26 @@ onMounted(() => store.fetchOperations())
 const activeOps = computed(() => store.operations.filter(o => o.status === 1))
 const inactiveOps = computed(() => store.operations.filter(o => o.status === 0))
 const current = computed(() => SOURCES.find(s => s.id === source.value))
-const needsMessage = computed(() => source.value === 'maps')
+const currentType = computed(() => ENTITY_TYPES.find(t => t.id === entityType.value))
+
+// Mostrado na tela antes de iniciar: o usuário vê exatamente o que será
+// pesquisado, em vez de descobrir pelo resultado.
+const query = computed(() => {
+  const parts = []
+  if (subject.value.trim()) parts.push(subject.value.trim())
+  if (limitRegion.value) {
+    const cidade = city.value.trim()
+    if (cidade && uf.value) parts.push(`${cidade}, ${uf.value}`)
+    else if (cidade) parts.push(cidade)
+    else if (uf.value) parts.push(ufName(uf.value))
+    else parts.push('Brasil')
+  }
+  return parts.join(' ')
+})
+
+function ufName(sigla) {
+  return UFS.find(u => u.sigla === sigla)?.nome || sigla
+}
 
 function sourceLabel(id) {
   return SOURCES.find(s => s.id === id)?.label || 'Google Maps'
@@ -49,13 +120,14 @@ function selectSource(id) {
   formSuccess.value = ''
 }
 
+function selectType(id) {
+  entityType.value = id
+  formError.value = ''
+}
+
 async function startOp() {
-  if (!searchText.value.trim()) {
-    formError.value = 'Preencha a busca.'
-    return
-  }
-  if (needsMessage.value && !messageTemplate.value.trim()) {
-    formError.value = 'Preencha o modelo de mensagem.'
+  if (!subject.value.trim()) {
+    formError.value = `Preencha ${currentType.value.subjectLabel.toLowerCase()}.`
     return
   }
   starting.value = true
@@ -63,12 +135,12 @@ async function startOp() {
   formSuccess.value = ''
   try {
     await store.startOperation(source.value, {
-      searchText: searchText.value.trim(),
-      messageUser: needsMessage.value ? messageTemplate.value.trim() : null,
+      searchText: query.value,
       title: title.value.trim() || null,
     })
     formSuccess.value = 'Operação iniciada! Os leads serão coletados em breve.'
-    searchText.value = ''
+    subject.value = ''
+    city.value = ''
     title.value = ''
   } catch (e) {
     formError.value = e.response?.data?.detail || 'Erro ao iniciar operação.'
@@ -150,25 +222,94 @@ onUnmounted(() => document.removeEventListener('keydown', onDetailKeydown))
           <p class="mt-1.5 text-xs text-txt-secondary/60">{{ current.hint }}</p>
         </div>
 
+        <div>
+          <label class="label">Você procura</label>
+          <div class="flex gap-2">
+            <button
+              v-for="t in ENTITY_TYPES"
+              :key="t.id"
+              type="button"
+              @click="selectType(t.id)"
+              :class="[
+                'rounded-xl border px-4 py-2 text-sm font-medium transition',
+                entityType === t.id
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              {{ t.label }}
+            </button>
+          </div>
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label class="label">{{ current.searchLabel }} <span class="text-red-400">*</span></label>
-            <input v-model="searchText" type="text" :placeholder="current.placeholder" class="input" required />
+            <label class="label">{{ currentType.subjectLabel }} <span class="text-red-400">*</span></label>
+            <input v-model="subject" type="text" :placeholder="currentType.placeholder" class="input" required />
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              <button
+                v-for="s in currentType.suggestions"
+                :key="s"
+                type="button"
+                @click="subject = s"
+                class="rounded-lg border border-brd-light px-2 py-1 text-[11px] text-txt-secondary transition hover:bg-surface-hover hover:text-txt-primary"
+              >
+                {{ s }}
+              </button>
+            </div>
           </div>
           <div>
             <label class="label">Título da operação (opcional)</label>
-            <input v-model="title" type="text" :placeholder="current.titlePlaceholder" class="input" />
+            <input v-model="title" type="text" placeholder="Ex: Vets Vitória" class="input" />
           </div>
         </div>
-        <div v-if="needsMessage">
-          <label class="label">Modelo de mensagem <span class="text-red-400">*</span></label>
-          <textarea
-            v-model="messageTemplate"
-            rows="3"
-            placeholder="Use {nome} para personalizar. Ex: Olá {nome}! Temos uma oferta especial."
-            class="input resize-none"
-          />
-          <p class="mt-1.5 text-xs text-txt-secondary/60">Use <code class="rounded-md bg-surface-hover px-1.5 py-0.5 text-brand text-[11px]">{nome}</code> para inserir o nome do negócio automaticamente.</p>
+
+        <div>
+          <label class="label">Região</label>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              @click="limitRegion = true"
+              :class="[
+                'rounded-xl border px-4 py-2 text-sm font-medium transition',
+                limitRegion
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              Definir região
+            </button>
+            <button
+              type="button"
+              @click="limitRegion = false"
+              :class="[
+                'rounded-xl border px-4 py-2 text-sm font-medium transition',
+                !limitRegion
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              Sem limite
+            </button>
+          </div>
+
+          <div v-if="limitRegion" class="mt-3 grid gap-3 sm:grid-cols-3">
+            <div>
+              <label class="label text-xs">País</label>
+              <input type="text" value="Brasil" class="input" disabled />
+            </div>
+            <div>
+              <label class="label text-xs">Estado (opcional)</label>
+              <select v-model="uf" class="input">
+                <option value="">Todos</option>
+                <option v-for="u in UFS" :key="u.sigla" :value="u.sigla">{{ u.nome }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label text-xs">Cidade (opcional)</label>
+              <input v-model="city" type="text" placeholder="Ex: Vitória" class="input" />
+            </div>
+          </div>
         </div>
 
         <div v-if="formError" class="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400">{{ formError }}</div>

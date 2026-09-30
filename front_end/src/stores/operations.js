@@ -20,13 +20,14 @@ export const useOperationsStore = defineStore('operations', () => {
     }
   }
 
-  // The maps endpoint takes `serach_text` and a message template; the instagram
-  // one takes `search_text` and no message, since nothing is sent yet.
-  function activateParams(source, { searchText, messageUser, title }) {
+  // The two endpoints spell the parameter differently. The message template is
+  // no longer sent: the backend keeps a default, since nothing consumes the
+  // queue yet.
+  function activateParams(source, { searchText, title }) {
     if (source === 'instagram') {
       return { search_text: searchText, title }
     }
-    return { serach_text: searchText, message_user: messageUser, title }
+    return { serach_text: searchText, title }
   }
 
   async function fetchOperationLeads(id) {

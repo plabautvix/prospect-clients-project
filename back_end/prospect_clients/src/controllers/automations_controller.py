@@ -13,6 +13,12 @@ router = APIRouter()
 
 _get_operations_service = service_provider(OperationsService, OperationsRepository)
 
+# Kept server side so the UI does not have to carry it. The queue still has no
+# consumer, so this is what gets stored until sending actually exists.
+DEFAULT_LEAD_MESSAGE = (
+    "Olá {nome}! Vi seu negócio e gostaria de apresentar uma oportunidade."
+)
+
 
 @router.post(
     "/operations/maps/activate",
@@ -26,7 +32,7 @@ _get_operations_service = service_provider(OperationsService, OperationsReposito
 )
 def send_message_maps_service(
     serach_text: str,
-    message_user: str,
+    message_user: str = DEFAULT_LEAD_MESSAGE,
     title: str = None,
     current_user: dict = Depends(get_current_user),
     ops_service: OperationsService = Depends(_get_operations_service),
