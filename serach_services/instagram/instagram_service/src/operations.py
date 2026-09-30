@@ -79,8 +79,12 @@ class Operations:
 
     async def _search(self, operation_id, user_id, search_text, stop_event) -> None:
         search = GoogleSearch()
-        await search.start()
         try:
+            # start() is inside the try on purpose: a launch that fails half way
+            # still leaves Chrome running, and stop() has to get a chance to
+            # clear it. Outside, one bad start orphaned a browser that then held
+            # the profile and broke every run after it.
+            await search.start()
             profiles = await search.find_profiles(
                 build_query(search_text), should_stop=stop_event.is_set
             )

@@ -10,6 +10,7 @@ one and two came back fine, the third was refused every time.
 import asyncio
 import logging
 import random
+import subprocess
 from pathlib import Path
 
 import nodriver as uc
@@ -39,16 +40,23 @@ class Blocked(Exception):
     """Google served a block page instead of results."""
 
 
-def clear_profile_locks(profile_dir: str) -> None:
-    """Drop the lock a crashed Chrome leaves behind in a persisted profile.
+def release_profile(profile_dir: str) -> None:
+    """Make a persisted profile usable again after a run that ended badly.
 
-    Chrome refuses to reuse a profile that still looks busy, and it never
-    clears the lock itself after an unclean exit. Without this, one killed
-    browser makes every later run fail until someone deletes the volume.
+    Two things can hold it. A Chrome that is still alive, left behind when a
+    launch failed half way and stop() never ran; and the lock file, which
+    Chrome never clears itself after an unclean exit. Both make every later run
+    fail the same way, so one bad start would otherwise poison the volume.
 
-    This assumes a single browser per profile, which holds while one operation
-    runs at a time.
+    Only browsers opened on this exact profile are killed, so nothing else on
+    the machine is touched. Assumes one browser per profile, which holds while
+    one operation runs at a time.
     """
+    subprocess.run(
+        ["pkill", "-f", f"--user-data-dir={profile_dir}"],
+        check=False,
+        capture_output=True,
+    )
     for name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
         Path(profile_dir, name).unlink(missing_ok=True)
 
@@ -86,9 +94,17 @@ class GoogleSearch:
             ],
         }
         if self.profile_dir:
-            clear_profile_locks(self.profile_dir)
+            release_profile(self.profile_dir)
             options["user_data_dir"] = self.profile_dir
-        self.browser = await uc.start(**options)
+
+        try:
+            self.browser = await uc.start(**options)
+        except Exception:
+            # A launch that fails part way still leaves Chrome running and
+            # holding the profile. Left alone it would break every later run.
+            if self.profile_dir:
+                release_profile(self.profile_dir)
+            raise
 
     async def stop(self) -> None:
         if self.browser:
@@ -104,15 +120,25 @@ class GoogleSearch:
     ) -> dict[str, SearchResult]:
         """Search and keep only Instagram profiles, by handle.
 
+        Goes as deep as Google allows. The run ends when there is no next page,
+        when Google blocks, or when the caller asks it to stop. `pages` is only
+        a ceiling for callers that want one; 0 means no ceiling.
+
         `should_stop` is an optional callable checked between pages, so a
         running operation can be cancelled without this module knowing about
         threads.
         """
         profiles: dict[str, SearchResult] = {}
+        previous_titles: list[str] = []
+        page = 0
 
         await self.open_search(query)
 
-        for page in range(pages):
+        while True:
+            if pages and page >= pages:
+                logger.info("stopping at the %d page ceiling", pages)
+                break
+
             if should_stop and should_stop():
                 break
 
@@ -136,13 +162,30 @@ class GoogleSearch:
             if not results:
                 break
 
+            # Without a page ceiling, a next link that fails to navigate would
+            # re-read the same page forever. Identical content means stuck.
+            titles = [r.title for r in results]
+            if titles == previous_titles:
+                logger.warning(
+                    "page %d repeated the previous one, stopping", page
+                )
+                break
+            previous_titles = titles
+
             new = duplicates = 0
             for result in results:
                 handle = instagram_handle(result)
                 if not handle:
-                    # Worth seeing in full: this is the only way a result is
-                    # silently dropped, so the log has to name it.
-                    logger.warning("no handle on page %d: %r", page, result.title)
+                    # This is the only way a result is silently dropped, so the
+                    # log carries the breadcrumb too: "instagram.com > p >
+                    # CODE" means a post and the drop is right, while
+                    # "instagram.com > somename" means a profile was lost.
+                    logger.warning(
+                        "no handle on page %d | title=%r | cite=%r",
+                        page,
+                        result.title,
+                        result.cite,
+                    )
                     continue
                 if handle in profiles:
                     duplicates += 1
@@ -166,7 +209,11 @@ class GoogleSearch:
                 duplicates,
                 len(results) - new - duplicates,
             )
+            page += 1
 
+        logger.info(
+            "finished with %d profiles after %d pages", len(profiles), page
+        )
         return profiles
 
     async def open_search(self, query: str) -> None:
