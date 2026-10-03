@@ -2,26 +2,30 @@ services:
 
   # ─── Infrastructure ───────────────────────────────────────────────────────
 
+  # Os brokers falam apenas com os serviços, pela rede interna do compose, e
+  # nada de fora os alcança. Por isso não há TLS entre eles: o hop já é privado,
+  # e quem estivesse dentro da rede para farejá-lo já teria acesso às senhas nas
+  # variáveis de ambiente. Usuário e senha continuam exigidos. Ver ARCHITECTURE.md,
+  # seção 7, S3 e S7.
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
-      - "${MQTT_HOST_PORT:-18883}:8883"
+      # Só para inspecionar o broker de fora; os serviços usam mosquitto:1883.
+      - "${MQTT_HOST_PORT:-11883}:1883"
     environment:
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
-    volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./certs/ca.crt:/mosquitto/certs/ca.crt:ro
-      - ./certs/mosquitto/server.crt:/mosquitto/certs/server.crt:ro
-      - ./certs/mosquitto/server.key:/mosquitto/certs/server.key:ro
-    # Build the password file from env on startup, then run the broker.
-    # rm -f: mosquitto_passwd -c refuses to overwrite an existing file, and the
-    # file survives a container restart. chown: the file is written as root but
-    # the broker drops privileges to the mosquitto user before reading it.
+    # A configuração é escrita aqui em vez de virar um arquivo no repositório:
+    # são três linhas, e sem ela o mosquitto só escuta em localhost e recusa os
+    # outros containers. O arquivo de senhas vem do env no boot.
+    # rm -f: mosquitto_passwd -c recusa sobrescrever, e o arquivo sobrevive a um
+    # restart. chown: ele é escrito como root, mas o broker larga privilégio
+    # para o usuário mosquitto antes de lê-lo.
     command:
       - sh
       - -c
       - |
+        printf 'listener 1883 0.0.0.0\nallow_anonymous false\npassword_file /mosquitto/config/passwd\n' > /mosquitto/config/mosquitto.conf &&
         rm -f /mosquitto/config/passwd &&
         mosquitto_passwd -b -c /mosquitto/config/passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD" &&
         chown mosquitto:mosquitto /mosquitto/config/passwd &&
@@ -30,16 +34,11 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5671:5671"
+      - "5672:5672"
       - "15672:15672"   # management UI at http://localhost:15672
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-prospect}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
-    volumes:
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ./certs/ca.crt:/etc/rabbitmq/certs/ca.crt:ro
-      - ./certs/rabbitmq/server.crt:/etc/rabbitmq/certs/server.crt:ro
-      - ./certs/rabbitmq/server.key:/etc/rabbitmq/certs/server.key:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -55,11 +54,9 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       MQTT_HOST: mosquitto
-      MQTT_PORT: 8883
+      MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
-      MQTT_TLS: "true"
-      MQTT_CA_CERT: /certs/ca.crt
       # Override JWT_SECRET in real deployments (e.g. via .env / secrets manager).
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-720}
@@ -67,7 +64,6 @@ services:
       SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
     volumes:
       - ./back_end:/app
-      - ./certs/ca.crt:/certs/ca.crt:ro
     depends_on:
       - mosquitto
 
@@ -75,17 +71,13 @@ services:
     build: ./serach_services/maps/maps_service
     environment:
       MQTT_HOST: mosquitto
-      MQTT_PORT: 8883
+      MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
-      MQTT_TLS: "true"
-      MQTT_CA_CERT: /certs/ca.crt
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5671
+      RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-prospect}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
-      RABBITMQ_TLS: "true"
-      RABBITMQ_CA_CERT: /certs/ca.crt
       RABBITMQ_EXCHANGE: fila_mensagens
       RABBITMQ_ROUTING_KEY: enviar
       BACKEND_API_URL: http://backend:8000
@@ -93,7 +85,6 @@ services:
       SELENIUM_HEADLESS: "true"
     volumes:
       - ./serach_services/maps/maps_service/src:/app/src
-      - ./certs/ca.crt:/certs/ca.crt:ro
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -108,11 +99,9 @@ services:
     shm_size: 1gb
     environment:
       MQTT_HOST: mosquitto
-      MQTT_PORT: 8883
+      MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
-      MQTT_TLS: "true"
-      MQTT_CA_CERT: /certs/ca.crt
       MQTT_TOPIC: prospect/instagram
       BACKEND_API_URL: http://backend:8000
       SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
@@ -120,7 +109,6 @@ services:
       CHROME_PROFILE_DIR: /data/chrome-profile
     volumes:
       - ./serach_services/instagram/instagram_service/src:/app/src
-      - ./certs/ca.crt:/certs/ca.crt:ro
       - instagram-chrome-profile:/data/chrome-profile
     depends_on:
       mosquitto:

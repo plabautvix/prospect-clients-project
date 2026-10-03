@@ -19,8 +19,8 @@ infraestrutura de mensageria, orquestrados por `docker-compose.yml`.
 | `backend` | FastAPI (Python 3.12) | 8000 | API REST, autenticação, persistência, orquestra o scraping via MQTT |
 | `maps-service` | Python + Selenium/Firefox | — | Faz o scraping do Google Maps, grava leads na API e enfileira mensagens |
 | `instagram-service` | Python + nodriver/Chrome | — | Busca perfis do Instagram pelo índice do Google e grava leads na API |
-| `mosquitto` | Eclipse Mosquitto (MQTT) | 8883 (TLS) | Bus de comando backend → serviços de scraping |
-| `rabbitmq` | RabbitMQ | 5671 (AMQPS) / 15672 | Fila de mensagens produzida pelo maps-service (sem consumidor) |
+| `mosquitto` | Eclipse Mosquitto (MQTT) | 11883 | Bus de comando backend → serviços de scraping |
+| `rabbitmq` | RabbitMQ | 5672 / 15672 | Fila de mensagens produzida pelo maps-service (sem consumidor) |
 
 ## 2. Diagrama de componentes
 
@@ -29,7 +29,7 @@ flowchart LR
     User([Usuário / Browser])
     FE[frontend\nVue + nginx :80]
     BE[backend\nFastAPI :8000]
-    MQTT{{mosquitto\nMQTTS :8883}}
+    MQTT{{mosquitto\nMQTT :1883}}
     MAPS[maps-service\nSelenium/Firefox]
     IG[instagram-service\nnodriver/Chrome]
     RMQ{{rabbitmq\nexchange fila_mensagens}}
@@ -168,11 +168,11 @@ forma independente.
 |---|---|---|---|
 | S1 | ✅ Resolvida | ~~Segredo do JWT chumbado e fraco~~ → centralizado em `configurations/auth.py`, lido de `JWT_SECRET` (env). **Pendência:** definir um segredo forte (≥32 bytes) em produção | `configurations/auth.py` |
 | S2 | ✅ Resolvida | ~~Token de usuário propagado/reutilizado~~ → o token não é mais enviado pelo MQTT; o maps-service usa `SERVICE_API_KEY` (`X-Service-Key`), validada por `require_service`, separada do JWT | `configurations/auth.py`, `utils/security.py`, `automations_service.py`, `lead_service.py` |
-| S3 | ✅ Resolvida | ~~MQTT anônimo~~ → `allow_anonymous false` + `password_file` + **TLS (8883)**; clients autenticam com usuário/senha sobre TLS | `mosquitto/mosquitto.conf`, `docker-compose.yml`, `publisher.py`, `mqtt_client.py` |
+| S3 | ✅ Resolvida | ~~MQTT anônimo~~ → `allow_anonymous false` + `password_file`; clients autenticam com usuário e senha. A config do broker é gerada no `command` do compose, não há arquivo no repositório | `docker-compose.yml`, `publisher.py`, `mqtt_client.py` |
 | S4 | ✅ Resolvida | ~~whatsapp sem autenticação (`/api/send*`) + CORS `*`~~ → o serviço `whatsapp` foi **removido**. A fila permanece; ao implementar o novo consumidor, exigir credencial de serviço e CORS restrito desde o início | (removido) |
 | S5 | ✅ Resolvida | ~~JWT sem `exp`~~ → token agora expira (`JWT_EXPIRATION_MINUTES`, default 720). Reduzir para 15–60 min após S2 | `user_service.py`, `configurations/auth.py` |
 | S6 | ✅ Resolvida | ~~RabbitMQ `guest/guest`~~ → usuário dedicado via `RABBITMQ_USER`/`RABBITMQ_PASSWORD` (sem guest) | `docker-compose.yml` |
-| S7 | ✅ Resolvida (mensageria) | ~~Sem TLS~~ → **TLS no MQTT (8883) e RabbitMQ (5671)** com CA self-signed (`scripts/gen-certs.sh`); clients validam a CA. **Pendência:** TLS no HTTP interno (nginx↔backend, backend↔maps) | `mosquitto.conf`, `rabbitmq/rabbitmq.conf`, `docker-compose.yml`, clients |
+| S7 | 🔵 Adiado por decisão | TLS entre serviços foi **removido**. Todos os containers compartilham a rede privada do compose num único host, e nada de fora alcança os brokers: o hop que o TLS protegia já é privado, e quem estivesse dentro da rede para farejá-lo leria as senhas nas variáveis de ambiente do mesmo jeito. Custava 12 arquivos e uma CA self-signed. **Reabrir quando** os serviços deixarem de compartilhar uma rede confiável: múltiplos hosts, Kubernetes entre nós, ou broker gerenciado. Nesses casos a resposta natural é o TLS do broker gerenciado, não uma CA própria | `docker-compose.yml` |
 | S8 | ✅ Resolvida | ~~`get_current_user` lançava `Exception` genérica + `print`~~ → agora `HTTPException(401)` com `WWW-Authenticate` | `utils/security.py` |
 | S9 | 🟡 Média | Token em `localStorage` (exposto a XSS) | `front_end/services/backend.js` |
 
@@ -202,9 +202,9 @@ sem escopo nem revogação independente.
 - **S1/S5:** mover `JWT_SECRET` para variável de ambiente/secrets manager (forte e
   único), centralizar num só lugar, adicionar `exp` e validar expiração; considerar
   *refresh tokens*.
-- **S3/S6/S7:** desligar `allow_anonymous` no MQTT e exigir usuário+senha+TLS; criar
-  usuários dedicados por serviço no RabbitMQ (remover `guest`); habilitar TLS em todos
-  os hops; nunca trafegar segredos no corpo das mensagens.
+- **S3/S6:** desligar `allow_anonymous` no MQTT e exigir usuário e senha; criar
+  usuários dedicados por serviço no RabbitMQ (remover `guest`); nunca trafegar
+  segredos no corpo das mensagens. TLS entre serviços: ver S7, adiado por decisão.
 - **S4:** resolvido pela remoção do serviço. O futuro consumidor da fila deve nascer em
   rede interna, sem endpoints públicos; se expuser HTTP, exigir credencial de serviço e
   CORS restrito a origens conhecidas.
@@ -215,7 +215,7 @@ sem escopo nem revogação independente.
 
 1. ✅ **Segredos:** `JWT_SECRET` por env + `exp` no token + corrigir `get_current_user` (S1, S5, S8) — **feito**. Falta definir um segredo forte por ambiente no deploy.
 2. ✅ **Identidade de serviço:** API key por serviço (`X-Service-Key`) e parar de propagar o token do usuário (S2) — **feito**. Pendências: chave forte por ambiente no deploy; least-privilege mais fino (escopos por serviço) e proteger também o canal (S3).
-3. ✅ **Endurecer brokers:** remover anonymous/guest + auth dedicada + **TLS** em MQTT/AMQP (S3, S6, S7) — **feito**. Pendências: certs reais em produção (hoje self-signed via `scripts/gen-certs.sh`) e TLS no HTTP interno.
+3. ✅ **Endurecer brokers:** remover anonymous/guest + auth dedicada (S3, S6) — **feito**. TLS entre serviços foi adiado por decisão (S7): rede privada de host único não justifica o custo.
 4. ✅ **Proteger whatsapp** (S4) — resolvido removendo o serviço. Reavaliar ao
    implementar o novo consumidor da fila `enviar`.
 5. **Evolução:** OAuth2 client-credentials/mTLS; migrar SQLite → Postgres para produção.

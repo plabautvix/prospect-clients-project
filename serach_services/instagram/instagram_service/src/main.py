@@ -62,8 +62,6 @@ def build_client() -> mqtt.Client:
 
     if config.MQTT_USERNAME:
         client.username_pw_set(config.MQTT_USERNAME, config.MQTT_PASSWORD)
-    if config.MQTT_TLS:
-        client.tls_set(ca_certs=config.MQTT_CA_CERT or None)
 
     return client
 

@@ -1,6 +1,5 @@
 import json
 import logging
-import ssl
 
 import pika
 
@@ -25,15 +24,10 @@ class RabbitMQPublisher:
         credentials = pika.PlainCredentials(
             settings.RABBITMQ_USER, settings.RABBITMQ_PASSWORD
         )
-        ssl_options = None
-        if settings.RABBITMQ_TLS:
-            context = ssl.create_default_context(cafile=settings.RABBITMQ_CA_CERT or None)
-            ssl_options = pika.SSLOptions(context, server_hostname=settings.RABBITMQ_HOST)
         params = pika.ConnectionParameters(
             host=settings.RABBITMQ_HOST,
             port=settings.RABBITMQ_PORT,
             credentials=credentials,
-            ssl_options=ssl_options,
         )
         self._connection = pika.BlockingConnection(params)
         self._channel = self._connection.channel()
