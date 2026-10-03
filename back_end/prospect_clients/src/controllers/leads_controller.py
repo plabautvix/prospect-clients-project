@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.utils.security import get_current_user, require_service
+from prospect_clients.src.models.schemas.campaigns import DoNotContactUpdate
 from prospect_clients.src.models.schemas.leads import (
     LeadSchema,
     LeadsPage,
@@ -73,6 +74,25 @@ def list_categories(
     current_user: dict = Depends(get_current_user),
 ):
     return service.get_categories(current_user["user_id"])
+
+
+@router.post(
+    "/do-not-contact",
+    summary="Flag leads as do not contact",
+    description=(
+        "Flagged leads are left out of every future campaign. Use it when "
+        "someone asks to stop receiving messages."
+    ),
+)
+def set_do_not_contact(
+    data: DoNotContactUpdate,
+    service: LeadsService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
+):
+    updated = service.set_do_not_contact(
+        current_user["user_id"], data.lead_ids, data.nao_contatar
+    )
+    return {"updated": updated}
 
 
 @router.post(

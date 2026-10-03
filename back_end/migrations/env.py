@@ -6,6 +6,7 @@ from prospect_clients.src.models.tables.base import Base
 # Importing the table modules registers them on Base.metadata, which is what
 # `alembic revision --autogenerate` compares the database against.
 from prospect_clients.src.models.tables import (  # noqa: F401
+    campaigns,
     leads,
     operations,
     user,

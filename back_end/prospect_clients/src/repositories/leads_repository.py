@@ -1,4 +1,4 @@
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -107,6 +107,46 @@ class LeadsRepository:
         total = query.count()
         items = query.offset(skip).limit(limit).all()
         return items, total
+
+    def get_all_by_user(
+        self,
+        user_id: int,
+        lead_ids: list[int] | None = None,
+        **filters,
+    ) -> list[Leads]:
+        """Every lead of the user matching the filters, without paging.
+
+        Used to build a campaign, which targets the whole selection and not
+        the page on screen. lead_ids outside the user's base are ignored.
+        """
+        query = self._filtered_query(user_id, **filters)
+        if lead_ids is not None:
+            query = query.filter(Leads.id_lead.in_(lead_ids))
+        return query.order_by(Leads.id_lead).all()
+
+    def get_do_not_contact(self, user_id: int) -> list[Leads]:
+        return (
+            self._filtered_query(user_id)
+            .filter(Leads.nao_contatar.is_(True))
+            .all()
+        )
+
+    def set_do_not_contact(
+        self, user_id: int, lead_ids: list[int], value: bool
+    ) -> int:
+        """Flag leads as do not contact, only among the user's own."""
+        meus_leads = (
+            select(UserLeadHistory.lead_id)
+            .where(UserLeadHistory.user_id == user_id)
+            .where(UserLeadHistory.lead_id.in_(lead_ids))
+        )
+        result = self.db.execute(
+            update(Leads)
+            .where(Leads.id_lead.in_(meus_leads))
+            .values(nao_contatar=value)
+        )
+        self.db.commit()
+        return result.rowcount
 
     def get_stats(self, user_id: int) -> dict:
         """Aggregates for the dashboard, counted in the database.

@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 from prospect_clients.src.configurations.database import engine
 from prospect_clients.src.controllers.automations_controller import router as automations_router
+from prospect_clients.src.controllers.campaigns_controller import router as campaigns_router
+from prospect_clients.src.controllers.outbox_controller import router as outbox_router
 from prospect_clients.src.controllers.user_controller import router as users_router
 from prospect_clients.src.controllers.leads_controller import router as leads_router
 from prospect_clients.src.controllers.operations_controller import router as operations_router
@@ -46,3 +48,5 @@ app.include_router(automations_router, prefix="/automations", tags=["automations
 app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(leads_router)
 app.include_router(operations_router)
+app.include_router(campaigns_router)
+app.include_router(outbox_router)

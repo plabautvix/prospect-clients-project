@@ -1,6 +1,6 @@
 from datetime import datetime
 from .base import Base
-from sqlalchemy import ForeignKey, DateTime
+from sqlalchemy import Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Integer, String
 
@@ -18,6 +18,8 @@ class Leads(Base):
         site (str): The website of the lead.
         foto (str): The photo URL of the lead.
         origem (str): Which service found it ("maps" or "instagram").
+        nao_contatar (bool): The lead asked not to be contacted again. No
+            campaign includes it.
     """
     __tablename__ = "leads"
     id_lead: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -29,6 +31,9 @@ class Leads(Base):
     categoria: Mapped[str] = mapped_column(String(100), nullable=True)
     origem: Mapped[str] = mapped_column(
         String(20), nullable=False, default="maps", server_default="maps"
+    )
+    nao_contatar: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
     )
 
 

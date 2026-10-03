@@ -37,6 +37,9 @@ class LeadsService:
     def get_categories(self, user_id: int) -> list[str]:
         return self.repository.get_distinct_categories(user_id)
 
+    def set_do_not_contact(self, user_id: int, lead_ids: list[int], value: bool) -> int:
+        return self.repository.set_do_not_contact(user_id, lead_ids, value)
+
     def get_leads_by_operation(self, operation_id: int, user_id: int):
         return self.repository.get_by_operation(operation_id, user_id)
 

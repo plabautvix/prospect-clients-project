@@ -31,6 +31,9 @@ class LeadSchema(BaseModel):
 
 class LeadResponse(LeadSchema):
     id_lead: int = Field(..., description="The primary key of the lead.")
+    nao_contatar: bool = Field(
+        False, description="Asked not to be contacted; left out of campaigns."
+    )
 
     model_config = {"from_attributes": True}
 
