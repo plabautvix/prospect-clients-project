@@ -31,19 +31,23 @@ services:
         chown mosquitto:mosquitto /mosquitto/config/passwd &&
         exec mosquitto -c /mosquitto/config/mosquitto.conf
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"   # management UI at http://localhost:15672
+  # Gateway do WhatsApp Web (WAHA Core). Sem porta publicada: só o
+  # whatsapp-sender fala com ele, pela rede do compose. O QR code para conectar
+  # o número aparece na tela de Campanhas. Ver ARCHITECTURE.md, seção 3.5.
+  waha:
+    image: devlikeapro/waha:latest
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-prospect}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      WAHA_API_KEY: ${WAHA_API_KEY:-dev-waha-key-change-me}
+      # GOWS fala o protocolo do WhatsApp direto, sem navegador. O WEBJS, padrão
+      # da imagem, quebrava a renovação do QR code (refreshQR is not a function)
+      # e derrubava a sessão antes da leitura.
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WAHA_DASHBOARD_ENABLED: "false"
+      WHATSAPP_SWAGGER_ENABLED: "false"
+      # Volta a sessão conectada depois de um restart, sem novo QR code.
+      WAHA_WORKER_RESTART_SESSIONS: "true"
+    volumes:
+      - waha-sessions:/app/.sessions
 
   # ─── Application services ─────────────────────────────────────────────────
 
@@ -74,20 +78,12 @@ services:
       MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-dev-mqtt-pass-change-me}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: ${RABBITMQ_USER:-prospect}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-dev-rabbit-pass-change-me}
-      RABBITMQ_EXCHANGE: fila_mensagens
-      RABBITMQ_ROUTING_KEY: enviar
       BACKEND_API_URL: http://backend:8000
       SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
       SELENIUM_HEADLESS: "true"
     volumes:
       - ./serach_services/maps/maps_service/src:/app/src
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       mosquitto:
         condition: service_started
       backend:
@@ -116,6 +112,21 @@ services:
       backend:
         condition: service_started
 
+  # Envia as mensagens de WhatsApp das campanhas. Não guarda estado: mensagens
+  # e ritmo ficam no banco do backend, então derrubá-lo não perde nada.
+  whatsapp-sender:
+    build: ./sender_services/whatsapp_sender
+    environment:
+      WAHA_URL: http://waha:3000
+      WAHA_API_KEY: ${WAHA_API_KEY:-dev-waha-key-change-me}
+      BACKEND_API_URL: http://backend:8000
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
+    volumes:
+      - ./sender_services/whatsapp_sender/src:/app/src
+    depends_on:
+      - waha
+      - backend
+
   frontend:
     build: ./front_end
     ports:
@@ -125,3 +136,4 @@ services:
 
 volumes:
   instagram-chrome-profile:
+  waha-sessions:
