@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import patch, MagicMock
 
 from messaging.rabbitmq_publisher import RabbitMQPublisher
@@ -61,3 +62,55 @@ class TestRabbitMQPublisher:
         publisher.close()
 
         mock_connection.close.assert_called_once()
+
+
+class TestStaleConnection:
+    """The publisher sits idle between scraping batches and gets dropped."""
+
+    def setup_method(self):
+        RabbitMQPublisher._instance = None
+
+    @staticmethod
+    def _mock_connection(mock_pika):
+        connection = MagicMock()
+        channel = MagicMock()
+        connection.channel.return_value = channel
+        connection.is_closed = False
+        connection.is_open = True
+        channel.is_closed = False
+        mock_pika.BlockingConnection.return_value = connection
+        return connection, channel
+
+    @patch("messaging.rabbitmq_publisher.pika")
+    def test_reconnects_and_resends_when_the_socket_died(self, mock_pika):
+        # pika only notices a dropped socket when it writes, so is_closed stays
+        # False and basic_publish is what raises.
+        mock_pika.exceptions.AMQPError = RuntimeError
+        connection, channel = self._mock_connection(mock_pika)
+        channel.basic_publish.side_effect = [RuntimeError("stream lost"), None]
+
+        RabbitMQPublisher().publish({"messages": ["a"]})
+
+        assert channel.basic_publish.call_count == 2
+        # A fresh connection, not the corpse of the old one.
+        assert mock_pika.BlockingConnection.call_count == 2
+
+    @patch("messaging.rabbitmq_publisher.pika")
+    def test_gives_up_after_one_retry(self, mock_pika):
+        mock_pika.exceptions.AMQPError = RuntimeError
+        _, channel = self._mock_connection(mock_pika)
+        channel.basic_publish.side_effect = RuntimeError("broker is down")
+
+        with pytest.raises(RuntimeError):
+            RabbitMQPublisher().publish({"messages": ["a"]})
+
+        # Two attempts, not an endless loop.
+        assert channel.basic_publish.call_count == 2
+
+    @patch("messaging.rabbitmq_publisher.pika")
+    def test_heartbeats_are_disabled(self, mock_pika):
+        self._mock_connection(mock_pika)
+
+        RabbitMQPublisher().publish({"messages": ["a"]})
+
+        assert mock_pika.ConnectionParameters.call_args[1]["heartbeat"] == 0

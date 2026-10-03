@@ -1,7 +1,10 @@
 import time
 import logging
 
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    StaleElementReferenceException,
+)
 from selenium.webdriver.common.by import By
 
 logger = logging.getLogger(__name__)
@@ -17,11 +20,28 @@ def safe_find_element(driver, selector: str, split_key: str | None = None):
         return None
 
 
+def click_lead(driver, lead_element):
+    """Click a result, falling back to JavaScript when something covers it.
+
+    Google Maps floats panels and tooltips over the result list, and Selenium
+    refuses to click an element another one overlaps. The lead was being
+    skipped entirely. A scripted click reaches the element regardless, and
+    scrolling it into view first avoids most of the overlaps anyway.
+    """
+    try:
+        lead_element.click()
+    except ElementClickInterceptedException:
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", lead_element
+        )
+        driver.execute_script("arguments[0].click();", lead_element)
+
+
 def extract_lead_info(driver, lead_element) -> dict | None:
     main_window = driver.current_window_handle
     existing_windows = set(driver.window_handles)
 
-    lead_element.click()
+    click_lead(driver, lead_element)
     time.sleep(0.8)
 
     # Close any new windows opened by the click
