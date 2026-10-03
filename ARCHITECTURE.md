@@ -8,19 +8,21 @@
 
 A aplicação coleta *leads* a partir de uma busca, por duas fontes: Google Maps
 (negócios com telefone e endereço) e Instagram (perfis encontrados pelo índice do
-Google). No caso do Maps ela ainda **enfileira** mensagens personalizadas no
-RabbitMQ; o envio propriamente dito não existe mais, e a fila fica retida à espera
-de um consumidor futuro. É composta por quatro serviços + duas peças de
-infraestrutura de mensageria, orquestrados por `docker-compose.yml`.
+Google). Sobre esses leads o usuário cria **campanhas**: envios em lote por
+WhatsApp (leads com celular) ou Instagram (perfis), entregues aos poucos, em lotes
+e em horário comercial. Cada mensagem é gravada no banco antes de sair, então nada
+se perde se algum serviço cair (ver 4.5). É composta por cinco serviços, um
+gateway de WhatsApp e um broker MQTT, orquestrados por `docker-compose.yml`.
 
 | Serviço | Stack | Porta (host) | Responsabilidade |
 |---|---|---|---|
 | `frontend` | Vue 3 + Vite + nginx | 80 | UI (login, prospecção, leads) |
 | `backend` | FastAPI (Python 3.12) | 8000 | API REST, autenticação, persistência, orquestra o scraping via MQTT |
-| `maps-service` | Python + Selenium/Firefox | — | Faz o scraping do Google Maps, grava leads na API e enfileira mensagens |
+| `maps-service` | Python + Selenium/Firefox | — | Faz o scraping do Google Maps e grava leads na API |
 | `instagram-service` | Python + nodriver/Chrome | — | Busca perfis do Instagram pelo índice do Google e grava leads na API |
+| `whatsapp-sender` | Python | — | Envia as mensagens de WhatsApp das campanhas, uma por vez, no ritmo que o backend define |
+| `waha` | WAHA Core (WhatsApp Web) | — | Gateway do WhatsApp; só o `whatsapp-sender` fala com ele |
 | `mosquitto` | Eclipse Mosquitto (MQTT) | 11883 | Bus de comando backend → serviços de scraping |
-| `rabbitmq` | RabbitMQ | 5672 / 15672 | Fila de mensagens produzida pelo maps-service (sem consumidor) |
 
 ## 2. Diagrama de componentes
 
@@ -32,7 +34,8 @@ flowchart LR
     MQTT{{mosquitto\nMQTT :1883}}
     MAPS[maps-service\nSelenium/Firefox]
     IG[instagram-service\nnodriver/Chrome]
-    RMQ{{rabbitmq\nexchange fila_mensagens}}
+    WS[whatsapp-sender]
+    WAHA[waha\nWhatsApp Web]
     DB[(SQLite test.db)]
 
     User -->|HTTP + JWT| FE
@@ -43,8 +46,8 @@ flowchart LR
     MQTT -->|subscribe prospect/instagram| IG
     MAPS -->|POST /leads?user_id, PATCH status\nX-Service-Key| BE
     IG -->|POST /leads?user_id, PATCH status\nX-Service-Key| BE
-    MAPS -->|publish fila_mensagens| RMQ
-    RMQ -.->|queue enviar\n(sem consumidor)| Futuro([Serviço de envio futuro])
+    WS -->|POST /outbox/whatsapp/claim\nresult, health\nX-Service-Key| BE
+    WS -->|REST + X-Api-Key| WAHA
 ```
 
 ## 3. Serviços em detalhe
@@ -52,7 +55,7 @@ flowchart LR
 ### 3.1 backend (FastAPI)
 - **Camadas:** Controller → Service → Repository (SQLAlchemy). DI de services via
   `configurations/dependencies.py::service_provider`.
-- **Domínios:** `users`, `operations`, `leads`, `automations`.
+- **Domínios:** `users`, `operations`, `leads`, `automations`, `campaigns`.
 - **Persistência:** SQLite (`configurations/database.py`, `sqlite:///./test.db`).
 - **Endpoints principais:**
   - `POST /users/`, `POST /users/login`, `GET /users/userme`
@@ -60,6 +63,11 @@ flowchart LR
   - `GET/POST /operations/`, `PATCH /operations/{id}/status`
   - `POST /automations/operations/maps/activate`, `PUT /automations/operations/maps/deactivate`
   - `POST /automations/operations/instagram/activate`, `PUT /automations/operations/instagram/deactivate`
+  - `POST /campaigns/preview`, `POST/GET /campaigns`, `GET /campaigns/{id}[/messages]`,
+    `POST /campaigns/{id}/pause|resume|cancel`, `GET /channels`, `POST /channels/{c}/unpause`
+  - `POST /leads/do-not-contact`
+  - Só serviço (`X-Service-Key`): `POST /outbox/{channel}/claim`,
+    `POST /outbox/messages/{id}/result`, `POST /outbox/{channel}/health`
 - **Mensageria de saída:** `utils/publisher.py` publica no MQTT (tópicos `prospect/maps` e `prospect/instagram`).
 - **Migrations:** o schema pertence ao **Alembic** (`back_end/migrations/`). A
   aplicação não cria nem altera tabela: o `alembic upgrade head` roda como passo
@@ -67,6 +75,8 @@ flowchart LR
   `configurations/database.py`, então há uma só fonte de verdade.
   - `0001_initial_schema` é o baseline do que o `create_all` criava.
   - `0002_add_operations_source` adiciona `operations.source`.
+  - `0005_add_campaigns` cria `campaigns`, `outbound_messages`, `sender_channels`
+    e `leads.nao_contatar`.
 - **`operations.source`** ("maps" ou "instagram") diz ao front qual endpoint de
   deactivate chamar, para que parar uma operação continue funcionando depois de
   um reload.
@@ -77,8 +87,8 @@ flowchart LR
   (`services/operation_service.py`); o scraping em si fica em `scraper/maps_scraper.py`.
 - **Saída:**
   - grava leads chamando `POST /leads/` no backend (`services/lead_service.py`);
-  - atualiza status via `PATCH /operations/{id}/status`;
-  - publica mensagens no RabbitMQ (`messaging/rabbitmq_publisher.py`).
+  - atualiza status via `PATCH /operations/{id}/status`.
+  - Não envia mensagem nenhuma: o envio é feito por campanhas (4.5).
 - **Estado:** operações ativas vivem **em memória** (`_active_operations`); reconciliadas
   no startup do backend (ver `OperationsService.reset_orphaned_operations`).
 
@@ -92,14 +102,30 @@ flowchart LR
   do Instagram é usada e nenhuma requisição vai para o Instagram.
 - **Saída:** grava leads chamando `POST /leads/` (`nome` recebe `@handle`, que é
   único no Instagram e é a chave do upsert) e atualiza status via
-  `PATCH /operations/{id}/status`. Não publica no RabbitMQ: não há envio.
+  `PATCH /operations/{id}/status`.
 - **Estado:** operações ativas vivem **em memória**, como no maps; reconciliadas
   no startup do backend por `OperationsService.reset_orphaned_operations`.
 
 ### 3.4 frontend (Vue)
-- Pinia stores (`auth`, `leads`, `operations`).
+- Pinia stores (`auth`, `leads`, `operations`, `campaigns`).
+- Campanhas: criadas na tela de Leads (seleção ou "todos do filtro"), acompanhadas
+  em `/campanhas` (status das contas, QR code, progresso, pausar/cancelar).
 - Token JWT guardado em `localStorage`; injetado em toda request via interceptor
   (`services/backend.js`). nginx faz proxy de `/api/backend` → backend.
+
+### 3.5 whatsapp-sender + waha
+- **Sem estado.** Mensagens e ritmo ficam no banco do backend. O worker repete:
+  checa a sessão no WAHA → `POST /outbox/whatsapp/claim` → envia → reporta o
+  resultado. Derrubá-lo a qualquer momento não perde nada (4.5).
+- **Envio** (`gateway.py`): confere se o número tem WhatsApp (`check-exists`, que
+  também resolve o nono dígito), simula digitação e chama `sendText`. Fica atrás
+  da interface `WhatsAppGateway`; trocar pela Cloud API oficial é escrever outro adapter.
+- **Conexão do número:** enquanto a sessão pede QR code, o worker o envia em
+  `POST /outbox/whatsapp/health` e a tela de Campanhas o mostra. A sessão fica no
+  volume `waha-sessions`.
+- O `waha` não publica porta: só o worker o alcança, pela rede do compose (S4).
+- Envio por Instagram (DM) ainda não existe: o canal já está no modelo e na API,
+  falta o worker (`instagram-dm`, com perfil de Chrome próprio, separado da busca).
 
 ## 4. Fluxos principais
 
@@ -113,8 +139,7 @@ flowchart LR
    (sem token de usuário).
 2. `maps-service` recebe, abre o Firefox, coleta leads.
 3. Para cada lote: `POST /leads/?user_id=...` no backend (autenticado com
-   `X-Service-Key`) **e** publica mensagens no RabbitMQ.
-4. As mensagens ficam na fila `enviar` até que um consumidor seja implementado.
+   `X-Service-Key`). O texto `message_user` fica só guardado na operação.
 
 ### 4.3 Iniciar busca no Instagram
 1. `POST /automations/operations/instagram/activate` cria a operação
@@ -124,7 +149,6 @@ flowchart LR
    `site:instagram.com <search_text>`, por até `MAX_PAGES` páginas.
 3. Extrai os handles dos resultados e grava tudo de uma vez com
    `POST /leads/?user_id=...` (`X-Service-Key`).
-4. Não publica no RabbitMQ: não há mensagem a enviar nesse fluxo.
 
 ### 4.4 Parar operação
 1. `PUT /automations/operations/{source}/deactivate` marca status=0 no banco e
@@ -132,13 +156,41 @@ flowchart LR
    endpoint pelo campo `source` da operação.
 2. O serviço seta o `stop_event` da thread e encerra o navegador.
 
+### 4.5 Envio em lote (campanhas)
+1. O usuário seleciona leads (ou "todos do filtro"), escolhe o canal e escreve a
+   mensagem. `POST /campaigns/preview` mostra quem recebe e quem fica de fora
+   (sem celular, não contatar, já contatado, repetido) e exemplos renderizados.
+2. `POST /campaigns` grava a campanha e **uma linha por mensagem** em
+   `outbound_messages`, já com o texto final, numa transação só.
+3. O worker do canal pede `claim`. O backend só entrega uma mensagem se o ritmo
+   permitir: uma por vez por conta, intervalo aleatório entre envios, pausa longa
+   a cada lote, teto diário e janela de horário (`configurations/messaging.py`).
+   Senão responde `retry_after_seconds`.
+4. O worker envia e reporta `sent`, `failed` (definitivo), `retry` (backoff, até 3
+   tentativas) ou `release` (a conta não pode enviar; a mensagem volta sem gastar
+   tentativa).
+
+**Garantias.** O ritmo é calculado do que está gravado (`sent_at`, `sender_channels`),
+nunca da memória do worker, então um restart não dispara um lote novo. Uma mensagem
+pega e não reportada volta para a fila quando o lease (5 min) vence: a entrega é
+*pelo menos uma vez*, e a janela de duplicata é o intervalo entre enviar e reportar.
+O worker insiste no report e trata SIGTERM terminando a mensagem em mãos.
+
+**Opt-out.** `leads.nao_contatar` tira o lead, e qualquer outro lead com o mesmo
+telefone ou perfil, de toda campanha futura. Ninguém é contatado duas vezes pelo
+mesmo canal pelo mesmo usuário.
+
 ## 5. Mensageria
 
 | Bus | Quem publica | Quem consome | Tópico/Exchange | Conteúdo |
 |---|---|---|---|---|
 | MQTT (mosquitto) | backend | maps-service | tópico `prospect/maps` | comando ativar/desativar (sem token; só `user_id`) |
 | MQTT (mosquitto) | backend | instagram-service | tópico `prospect/instagram` | comando ativar/desativar (sem token; só `user_id`) |
-| RabbitMQ | maps-service | — (nenhum; fila retida) | exchange `fila_mensagens` (direct), routing `enviar` | `{ messages: [{ lead, message }] }` |
+| HTTP pull (outbox) | backend | whatsapp-sender | `POST /outbox/{channel}/claim` | uma mensagem por vez, ou `retry_after_seconds` |
+
+O RabbitMQ foi removido: a fila precisava de atraso por horas, pausa, cancelamento
+e status por mensagem, e tudo isso exigia o banco de qualquer jeito. Com os dois
+haveria duas fontes de verdade. O banco é a fila.
 
 ## 6. Autenticação e fluxo de credenciais (estado atual)
 
@@ -169,7 +221,7 @@ forma independente.
 | S1 | ✅ Resolvida | ~~Segredo do JWT chumbado e fraco~~ → centralizado em `configurations/auth.py`, lido de `JWT_SECRET` (env). **Pendência:** definir um segredo forte (≥32 bytes) em produção | `configurations/auth.py` |
 | S2 | ✅ Resolvida | ~~Token de usuário propagado/reutilizado~~ → o token não é mais enviado pelo MQTT; o maps-service usa `SERVICE_API_KEY` (`X-Service-Key`), validada por `require_service`, separada do JWT | `configurations/auth.py`, `utils/security.py`, `automations_service.py`, `lead_service.py` |
 | S3 | ✅ Resolvida | ~~MQTT anônimo~~ → `allow_anonymous false` + `password_file`; clients autenticam com usuário e senha. A config do broker é gerada no `command` do compose, não há arquivo no repositório | `docker-compose.yml`, `publisher.py`, `mqtt_client.py` |
-| S4 | ✅ Resolvida | ~~whatsapp sem autenticação (`/api/send*`) + CORS `*`~~ → o serviço `whatsapp` foi **removido**. A fila permanece; ao implementar o novo consumidor, exigir credencial de serviço e CORS restrito desde o início | (removido) |
+| S4 | ✅ Resolvida | ~~whatsapp sem autenticação (`/api/send*`) + CORS `*`~~ → o serviço antigo foi removido. O envio novo nasceu fechado: `whatsapp-sender` não expõe HTTP, `waha` não publica porta e exige `WAHA_API_KEY`, e as rotas `/outbox/*` exigem `X-Service-Key` | `docker-compose.yml`, `outbox_controller.py` |
 | S5 | ✅ Resolvida | ~~JWT sem `exp`~~ → token agora expira (`JWT_EXPIRATION_MINUTES`, default 720). Reduzir para 15–60 min após S2 | `user_service.py`, `configurations/auth.py` |
 | S6 | ✅ Resolvida | ~~RabbitMQ `guest/guest`~~ → usuário dedicado via `RABBITMQ_USER`/`RABBITMQ_PASSWORD` (sem guest) | `docker-compose.yml` |
 | S7 | 🔵 Adiado por decisão | TLS entre serviços foi **removido**. Todos os containers compartilham a rede privada do compose num único host, e nada de fora alcança os brokers: o hop que o TLS protegia já é privado, e quem estivesse dentro da rede para farejá-lo leria as senhas nas variáveis de ambiente do mesmo jeito. Custava 12 arquivos e uma CA self-signed. **Reabrir quando** os serviços deixarem de compartilhar uma rede confiável: múltiplos hosts, Kubernetes entre nós, ou broker gerenciado. Nesses casos a resposta natural é o TLS do broker gerenciado, não uma CA própria | `docker-compose.yml` |
@@ -216,6 +268,7 @@ sem escopo nem revogação independente.
 1. ✅ **Segredos:** `JWT_SECRET` por env + `exp` no token + corrigir `get_current_user` (S1, S5, S8) — **feito**. Falta definir um segredo forte por ambiente no deploy.
 2. ✅ **Identidade de serviço:** API key por serviço (`X-Service-Key`) e parar de propagar o token do usuário (S2) — **feito**. Pendências: chave forte por ambiente no deploy; least-privilege mais fino (escopos por serviço) e proteger também o canal (S3).
 3. ✅ **Endurecer brokers:** remover anonymous/guest + auth dedicada (S3, S6) — **feito**. TLS entre serviços foi adiado por decisão (S7): rede privada de host único não justifica o custo.
-4. ✅ **Proteger whatsapp** (S4) — resolvido removendo o serviço. Reavaliar ao
-   implementar o novo consumidor da fila `enviar`.
+4. ✅ **Proteger whatsapp** (S4): resolvido. O envio novo usa outbox no banco,
+   sem RabbitMQ, e nenhuma peça dele é alcançável de fora. Pendência: uma
+   `SERVICE_API_KEY` por serviço, para o worker de envio não poder gravar leads.
 5. **Evolução:** OAuth2 client-credentials/mTLS; migrar SQLite → Postgres para produção.
