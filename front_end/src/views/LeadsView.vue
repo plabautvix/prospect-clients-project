@@ -1,8 +1,13 @@
 <script setup>
 import { ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useLeadsStore } from '@/stores/leads'
+import { useCampaignsStore } from '@/stores/campaigns'
+import NewCampaignModal from '@/components/campaigns/NewCampaignModal.vue'
 
 const leadsStore = useLeadsStore()
+const campaignsStore = useCampaignsStore()
+const router = useRouter()
 
 const SOURCES = [
   { id: 'maps', label: 'Google Maps' },
@@ -136,6 +141,53 @@ function toggle(lead) {
   else selected.value.set(lead.id_lead, lead)
 }
 
+// Envio: pelos leads marcados ou, sem seleção, por tudo o que o filtro mostra.
+// O canal sugerido segue a origem: perfis do Instagram por DM, o resto por WhatsApp.
+const sendTarget = ref(null)
+
+function openSendSelected() {
+  const leads = [...selected.value.values()]
+  sendTarget.value = {
+    leadIds: leads.map((l) => l.id_lead),
+    filters: {},
+    count: leads.length,
+    defaultChannel: leads.every((l) => l.origem === 'instagram') ? 'instagram' : 'whatsapp',
+  }
+}
+
+function openSendFiltered() {
+  const origem = leadsStore.filters.origem
+  sendTarget.value = {
+    leadIds: [],
+    filters: { ...leadsStore.filters },
+    count: leadsStore.total,
+    defaultChannel: origem.length === 1 && origem[0] === 'instagram' ? 'instagram' : 'whatsapp',
+  }
+}
+
+function onCampaignCreated() {
+  sendTarget.value = null
+  selected.value.clear()
+  router.push('/campanhas')
+}
+
+// Opt-out: quem pediu para não receber mensagem fica fora de toda campanha.
+const allSelectedDnc = computed(() =>
+  [...selected.value.values()].every((l) => l.nao_contatar)
+)
+const dncBusy = ref(false)
+
+async function toggleDoNotContact() {
+  dncBusy.value = true
+  try {
+    await campaignsStore.setDoNotContact([...selected.value.keys()], !allSelectedDnc.value)
+    selected.value.clear()
+    await leadsStore.fetchLeads()
+  } finally {
+    dncBusy.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -145,18 +197,37 @@ function toggle(lead) {
         <h1 class="text-2xl font-extrabold text-txt-primary">Leads</h1>
         <p class="mt-1 text-sm text-txt-secondary">{{ leadsStore.total }} leads coletados.</p>
       </div>
-      <button @click="leadsStore.fetchLeads()" class="btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        Atualizar
-      </button>
+      <div class="flex gap-2">
+        <button
+          @click="openSendFiltered"
+          class="btn-secondary"
+          :disabled="leadsStore.total === 0"
+          title="Enviar mensagem para todos os leads do filtro atual"
+        >
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          Enviar para todos ({{ leadsStore.total }})
+        </button>
+        <button @click="leadsStore.fetchLeads()" class="btn-secondary">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Atualizar
+        </button>
+      </div>
     </div>
 
     <!-- Seleção -->
     <div v-if="selected.size > 0" class="card flex items-center gap-4 border-brand/20 bg-brand/5 py-3">
       <p class="text-sm font-medium text-txt-primary">{{ selected.size }} lead(s) selecionado(s)</p>
-      <button @click="selected.clear()" class="btn-secondary ml-auto text-xs">Cancelar seleção</button>
+      <div class="ml-auto flex gap-2">
+        <button @click="openSendSelected" class="btn-primary text-xs">Enviar mensagem</button>
+        <button @click="toggleDoNotContact" :disabled="dncBusy" class="btn-secondary text-xs">
+          {{ allSelectedDnc ? 'Permitir contato' : 'Não contatar' }}
+        </button>
+        <button @click="selected.clear()" class="btn-secondary text-xs">Cancelar seleção</button>
+      </div>
     </div>
 
     <!-- Filtros -->
@@ -336,6 +407,12 @@ function toggle(lead) {
                   >
                     {{ sourceLabel(lead.origem) }}
                   </span>
+                  <span
+                    v-if="lead.nao_contatar"
+                    class="rounded-md bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+                  >
+                    não contatar
+                  </span>
                 </div>
               </td>
               <td class="px-4 py-3 text-[#a1a8a4]">
@@ -386,5 +463,15 @@ function toggle(lead) {
         </div>
       </div>
     </div>
+
+    <NewCampaignModal
+      v-if="sendTarget"
+      :lead-ids="sendTarget.leadIds"
+      :filters="sendTarget.filters"
+      :target-count="sendTarget.count"
+      :default-channel="sendTarget.defaultChannel"
+      @close="sendTarget = null"
+      @created="onCampaignCreated"
+    />
   </div>
 </template>

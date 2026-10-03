@@ -22,6 +22,7 @@ const routes = [
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
       { path: 'prospeccao', name: 'prospeccao', component: () => import('@/views/ProspeccaoView.vue') },
       { path: 'leads', name: 'leads', component: () => import('@/views/LeadsView.vue') },
+      { path: 'campanhas', name: 'campanhas', component: () => import('@/views/CampanhasView.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
