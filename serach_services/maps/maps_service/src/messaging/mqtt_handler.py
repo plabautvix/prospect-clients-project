@@ -31,7 +31,6 @@ def on_message(client, userdata, msg):
         if status == 1:
             _operation_service.start_operation(
                 search_text=payload.get("search_text"),
-                message_text=payload.get("message_user"),
                 user_id=payload.get("user_id"),
                 title=payload.get("title"),
                 operation_id=payload.get("id_operation"),

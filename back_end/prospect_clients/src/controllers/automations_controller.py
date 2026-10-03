@@ -13,8 +13,9 @@ router = APIRouter()
 
 _get_operations_service = service_provider(OperationsService, OperationsRepository)
 
-# Kept server side so the UI does not have to carry it. The queue still has no
-# consumer, so this is what gets stored until sending actually exists.
+# Stored on the operation as a suggestion only: nothing is sent while
+# scraping. Messages go out through campaigns, which the user creates and
+# reviews from the leads screen.
 DEFAULT_LEAD_MESSAGE = (
     "Olá {nome}! Vi seu negócio e gostaria de apresentar uma oportunidade."
 )
@@ -51,7 +52,6 @@ def send_message_maps_service(
     # Publish to MQTT with the id already created (maps_service uses it, does not recreate)
     AutomationsService().activate_maps_scraping(
         search_text=serach_text,
-        message_user=message_user,
         user_id=current_user["user_id"],
         id_operation=operation.id_operation,
         title=title,

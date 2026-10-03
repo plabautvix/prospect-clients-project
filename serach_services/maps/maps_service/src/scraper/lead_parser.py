@@ -105,12 +105,3 @@ def process_leads(driver, results: list, entities: list, seen_hrefs: set, max_le
         if len(entities) >= max_leads:
             return
 
-
-def build_lead_messages(leads: list[dict], message_template: str) -> list[dict]:
-    messages = []
-    for lead in leads:
-        if not lead.get("telefone"):
-            continue
-        personalized = message_template.replace("{nome}", lead.get("nome", ""))
-        messages.append({"lead": lead["telefone"], "message": personalized})
-    return messages

@@ -15,14 +15,6 @@ class Settings:
         self.MQTT_USERNAME: str = os.getenv("MQTT_USERNAME", "")
         self.MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD", "")
 
-        # RabbitMQ
-        self.RABBITMQ_HOST: str = os.getenv("RABBITMQ_HOST", "localhost")
-        self.RABBITMQ_PORT: int = int(os.getenv("RABBITMQ_PORT", "5672"))
-        self.RABBITMQ_USER: str = os.getenv("RABBITMQ_USER", "guest")
-        self.RABBITMQ_PASSWORD: str = os.getenv("RABBITMQ_PASSWORD", "guest")
-        self.RABBITMQ_EXCHANGE: str = os.getenv("RABBITMQ_EXCHANGE", "fila_mensagens")
-        self.RABBITMQ_ROUTING_KEY: str = os.getenv("RABBITMQ_ROUTING_KEY", "enviar")
-
         # Backend API
         self.BACKEND_API_URL: str = os.getenv("BACKEND_API_URL", "http://localhost:8000")
         # Service-to-service credential used to call the backend (X-Service-Key).

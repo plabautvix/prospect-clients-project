@@ -19,7 +19,6 @@ RUN pip install --no-cache-dir \
     "paho-mqtt>=2.1.0,<3.0.0" \
     "selenium>=4.38.0,<5.0.0" \
     "requests>=2.32.5,<3.0.0" \
-    "pika>=1.3.2,<2.0.0" \
     "python-dotenv>=1.0.0,<2.0.0"
 
 COPY src/ ./src/

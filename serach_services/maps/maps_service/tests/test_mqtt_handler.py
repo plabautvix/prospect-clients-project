@@ -38,7 +38,6 @@ class TestOnMessage:
 
         mock_service.start_operation.assert_called_once_with(
             search_text="padarias SP",
-            message_text="Ola {nome}",
             user_id=1,
             title="Padarias",
             operation_id=7,

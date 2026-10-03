@@ -18,7 +18,6 @@ class TestOperationService:
         service = OperationService()
         service.start_operation(
             search_text="lojas SP",
-            message_text="Oi {nome}",
             user_id=1,
             operation_id=10,
             title="Lojas",
@@ -66,7 +65,7 @@ class TestOperationService:
     def test_start_operation_without_id_aborts(self, mock_requests, mock_scrape):
         service = OperationService()
         service.start_operation(
-            search_text="test", message_text="oi", user_id=1, operation_id=None
+            search_text="test", user_id=1, operation_id=None
         )
 
         # No thread should be created and no API call made

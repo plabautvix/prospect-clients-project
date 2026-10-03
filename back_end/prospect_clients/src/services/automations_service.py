@@ -19,7 +19,7 @@ def _get_firefox_options() -> Options:
 
 class AutomationsService:
     def activate_maps_scraping(
-        self, search_text: str, message_user: str, user_id: int,
+        self, search_text: str, user_id: int,
         id_operation: int, title: str | None = None,
         limit: int | None = None,
     ) -> dict:
@@ -33,7 +33,6 @@ class AutomationsService:
                 "search_text": search_text,
                 "title": title,
                 "user_id": user_id,
-                "message_user": message_user,
                 "limit": limit,
             },
         )

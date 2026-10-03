@@ -9,7 +9,6 @@ class TestSettings:
         s = Settings()
         assert s.MQTT_HOST == "localhost"
         assert s.MQTT_PORT == 1883
-        assert s.RABBITMQ_USER == "guest"
         assert s.BACKEND_API_URL == "http://localhost:8000"
 
     def test_env_override(self):

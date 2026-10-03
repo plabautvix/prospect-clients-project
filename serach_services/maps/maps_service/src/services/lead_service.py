@@ -3,27 +3,19 @@ import logging
 import requests
 
 from config.settings import settings
-from messaging.rabbitmq_publisher import RabbitMQPublisher
-from scraper.lead_parser import build_lead_messages
 
 logger = logging.getLogger(__name__)
 
 
 class LeadService:
-    def __init__(
-        self, user_id: int, message_template: str,
-        operation_id: int | None = None,
-    ):
+    def __init__(self, user_id: int, operation_id: int | None = None):
         self._user_id = user_id
-        self._message_template = message_template
         self._operation_id = operation_id
-        self._publisher = RabbitMQPublisher()
 
     def process_found_leads(self, leads: list[dict]):
+        # Only stores them. Messages are sent through campaigns, which the
+        # user creates and reviews from the leads screen.
         self._send_leads_to_api(leads)
-        messages = build_lead_messages(leads, self._message_template)
-        if messages:
-            self._publish_to_rabbitmq(messages)
 
     def _send_leads_to_api(self, leads: list[dict]):
         url = f"{settings.BACKEND_API_URL}/leads/"
@@ -47,10 +39,3 @@ class LeadService:
                 logger.warning("Failed to insert leads: %s %s", response.status_code, response.text)
         except requests.RequestException:
             logger.exception("Error sending leads to backend API")
-
-    def _publish_to_rabbitmq(self, messages: list[dict]):
-        try:
-            self._publisher.publish({"messages": messages})
-            logger.info("Published %d messages to RabbitMQ", len(messages))
-        except Exception:
-            logger.exception("Error publishing to RabbitMQ")

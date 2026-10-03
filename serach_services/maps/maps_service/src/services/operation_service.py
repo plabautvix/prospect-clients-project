@@ -16,7 +16,7 @@ class OperationService:
         self._lock = threading.Lock()
 
     def start_operation(
-        self, search_text: str, message_text: str, user_id: int,
+        self, search_text: str, user_id: int,
         operation_id: int | None = None, title: str | None = None,
         limit: int | None = None,
     ):
@@ -26,11 +26,7 @@ class OperationService:
             return
 
         stop_event = threading.Event()
-        lead_service = LeadService(
-            user_id=user_id,
-            message_template=message_text,
-            operation_id=operation_id,
-        )
+        lead_service = LeadService(user_id=user_id, operation_id=operation_id)
 
         def _run_and_finalize():
             scrape_maps(
