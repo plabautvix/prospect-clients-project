@@ -37,6 +37,17 @@
     @apply block text-sm font-medium text-txt-secondary mb-1.5;
   }
 
+  /* O painel aberto de um <select> é desenhado pelo sistema, não pela página,
+     então ele ignora o bg-surface translúcido e cai num fundo branco. Com o
+     texto branco do tema, a lista fica ilegível. color-scheme resolve em
+     Chrome e Edge; as cores explícitas do option cobrem o Firefox. */
+  select.input {
+    color-scheme: dark;
+  }
+  select.input option {
+    @apply bg-dark-base text-txt-primary;
+  }
+
   /* ── Card ────────────────────────────────────── */
   .card {
     @apply bg-surface border border-brd-light rounded-2xl p-6 backdrop-blur-sm;
