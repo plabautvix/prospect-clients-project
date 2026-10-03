@@ -40,3 +40,30 @@ class LeadsPage(BaseModel):
     total: int = Field(..., description="Total number of leads matching the filters.")
     skip: int = Field(..., description="Number of leads skipped (offset).")
     limit: int = Field(..., description="Maximum number of leads per page.")
+
+
+class OrigemCount(BaseModel):
+    origem: str
+    total: int
+
+
+class CategoriaCount(BaseModel):
+    categoria: str
+    total: int
+
+
+class LeadsStats(BaseModel):
+    """Aggregates for the dashboard, counted over the user's whole base."""
+
+    total: int = Field(..., description="Leads the user has collected.")
+    por_origem: List[OrigemCount] = Field(..., description="Count per source.")
+    por_categoria: List[CategoriaCount] = Field(
+        ..., description="Count per category, biggest first."
+    )
+    total_categorias: int = Field(..., description="Distinct categories.")
+    sem_site: int = Field(..., description="Leads with no website.")
+    sem_telefone: int = Field(..., description="Leads with no phone.")
+    sem_endereco: int = Field(..., description="Leads with no address.")
+    sem_contato: int = Field(
+        ..., description="Leads with neither phone nor website: unreachable."
+    )

@@ -1,7 +1,11 @@
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from prospect_clients.src.models.tables.leads import Leads, UserLeadHistory
+
+# Quantas categorias o painel mostra antes de agrupar o resto em "outras".
+TOP_CATEGORIES = 10
 
 
 class LeadsRepository:
@@ -103,6 +107,72 @@ class LeadsRepository:
         total = query.count()
         items = query.offset(skip).limit(limit).all()
         return items, total
+
+    def get_stats(self, user_id: int) -> dict:
+        """Aggregates for the dashboard, counted in the database.
+
+        The page endpoint cannot answer these: it returns one page, so counting
+        there would describe the page and not the base. Everything here is a
+        COUNT over the user's whole set.
+        """
+        # Um lead pode aparecer várias vezes no histórico, uma por operação que
+        # o encontrou, então o conjunto do usuário é o de ids distintos.
+        meus_leads = (
+            select(UserLeadHistory.lead_id)
+            .where(UserLeadHistory.user_id == user_id)
+            .distinct()
+        )
+
+        def contar(*condicoes) -> int:
+            query = self.db.query(func.count(Leads.id_lead)).filter(
+                Leads.id_lead.in_(meus_leads)
+            )
+            for condicao in condicoes:
+                query = query.filter(condicao)
+            return query.scalar() or 0
+
+        def vazio(coluna):
+            return or_(coluna.is_(None), coluna == "")
+
+        def agrupar_por(coluna, limite=None):
+            query = (
+                self.db.query(coluna, func.count(Leads.id_lead))
+                .filter(Leads.id_lead.in_(meus_leads))
+                .group_by(coluna)
+                .order_by(func.count(Leads.id_lead).desc())
+            )
+            if limite:
+                query = query.limit(limite)
+            return query.all()
+
+        total = contar()
+        categorias = agrupar_por(Leads.categoria, TOP_CATEGORIES)
+        total_categorias = (
+            self.db.query(func.count(func.distinct(Leads.categoria)))
+            .filter(Leads.id_lead.in_(meus_leads))
+            .filter(Leads.categoria.isnot(None))
+            .scalar()
+            or 0
+        )
+
+        return {
+            "total": total,
+            "por_origem": [
+                {"origem": origem or "maps", "total": quantidade}
+                for origem, quantidade in agrupar_por(Leads.origem)
+            ],
+            "por_categoria": [
+                {"categoria": categoria or "Sem categoria", "total": quantidade}
+                for categoria, quantidade in categorias
+            ],
+            "total_categorias": total_categorias,
+            "sem_site": contar(vazio(Leads.site)),
+            "sem_telefone": contar(vazio(Leads.telefone)),
+            "sem_endereco": contar(vazio(Leads.endereco)),
+            # Sem telefone nem site não há como abordar: é o número que diz
+            # quanto da base é inútil para prospecção.
+            "sem_contato": contar(vazio(Leads.telefone), vazio(Leads.site)),
+        }
 
     def get_distinct_categories(self, user_id: int) -> list[str]:
         rows = (

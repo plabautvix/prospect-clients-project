@@ -289,3 +289,96 @@ class TestOperationLeads:
 
     def test_requires_authentication(self, client):
         assert client.get("/operations/1/leads").status_code in (401, 403)
+
+
+class TestLeadStats:
+    """GET /leads/stats: aggregates counted over the whole base."""
+
+    def _seed(self, client, db, email, leads):
+        from prospect_clients.src.configurations.auth import SERVICE_API_KEY
+
+        client.post("/users/", json={"email": email, "password": "pass"})
+        token = client.post(
+            "/users/login", data={"username": email, "password": "pass"}
+        ).json()["access_token"]
+        user = UserRepository(db).get_by_email(email)
+        client.post(
+            "/leads/",
+            params={"user_id": user.id_person},
+            json=leads,
+            headers={"X-Service-Key": SERVICE_API_KEY},
+        )
+        return token
+
+    def test_counts_the_whole_base_not_one_page(self, client, db):
+        # The bug this endpoint exists to fix: the dashboard counted the loaded
+        # page, so it showed the page size instead of the real total.
+        leads = [{"nome": f"Lead {i}", "telefone": "1"} for i in range(120)]
+        token = self._seed(client, db, "stats@test.com", leads)
+
+        body = client.get(
+            "/leads/stats", headers={"Authorization": f"Bearer {token}"}
+        ).json()
+
+        assert body["total"] == 120
+
+    def test_groups_by_source_and_category(self, client, db):
+        token = self._seed(
+            client,
+            db,
+            "grupos@test.com",
+            [
+                {"nome": "A", "categoria": "Barbearia", "origem": "maps"},
+                {"nome": "B", "categoria": "Barbearia", "origem": "maps"},
+                {"nome": "@c", "categoria": "Barbearia", "origem": "instagram"},
+                {"nome": "D", "categoria": "Pet shop", "origem": "maps"},
+            ],
+        )
+
+        body = client.get(
+            "/leads/stats", headers={"Authorization": f"Bearer {token}"}
+        ).json()
+
+        assert {r["origem"]: r["total"] for r in body["por_origem"]} == {
+            "maps": 3,
+            "instagram": 1,
+        }
+        # Biggest first.
+        assert body["por_categoria"][0] == {"categoria": "Barbearia", "total": 3}
+        assert body["total_categorias"] == 2
+
+    def test_counts_missing_contact_details(self, client, db):
+        token = self._seed(
+            client,
+            db,
+            "faltando@test.com",
+            [
+                {"nome": "Completo", "telefone": "1", "site": "a.com"},
+                {"nome": "So telefone", "telefone": "1"},
+                {"nome": "So site", "site": "b.com"},
+                {"nome": "Nada"},
+                {"nome": "Vazio", "telefone": "", "site": ""},
+            ],
+        )
+
+        body = client.get(
+            "/leads/stats", headers={"Authorization": f"Bearer {token}"}
+        ).json()
+
+        assert body["sem_site"] == 3
+        assert body["sem_telefone"] == 3
+        # Neither phone nor site: empty strings count as missing, not as filled.
+        assert body["sem_contato"] == 2
+
+    def test_one_user_does_not_see_another_users_base(self, client, db):
+        self._seed(client, db, "dono@test.com", [{"nome": "Do dono"}])
+        outro = self._seed(client, db, "outro@test.com", [{"nome": "Do outro"}])
+
+        body = client.get(
+            "/leads/stats", headers={"Authorization": f"Bearer {outro}"}
+        ).json()
+
+        assert body["total"] == 1
+
+    def test_requires_authentication(self, client):
+        assert client.get("/leads/stats").status_code in (401, 403)

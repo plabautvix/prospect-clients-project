@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, Query
 
 from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.utils.security import get_current_user, require_service
-from prospect_clients.src.models.schemas.leads import LeadSchema, LeadsPage
+from prospect_clients.src.models.schemas.leads import (
+    LeadSchema,
+    LeadsPage,
+    LeadsStats,
+)
 from prospect_clients.src.repositories.leads_repository import LeadsRepository
 from prospect_clients.src.services.leads_service import LeadsService
 
@@ -41,6 +45,22 @@ def list_leads(
         site=site,
         origem=origem,
     )
+
+
+@router.get(
+    "/stats",
+    response_model=LeadsStats,
+    summary="Aggregates for the dashboard",
+    description=(
+        "Counted in the database over the whole base. The paginated list "
+        "cannot answer these: it would describe one page."
+    ),
+)
+def lead_stats(
+    service: LeadsService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
+):
+    return service.get_stats(current_user["user_id"])
 
 
 @router.get(

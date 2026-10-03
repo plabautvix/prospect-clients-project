@@ -44,6 +44,19 @@ export const useLeadsStore = defineStore('leads', () => {
     }
   }
 
+  // Agregados vêm do banco: contar no front descreveria só a página carregada,
+  // que era o bug do dashboard antigo.
+  const stats = ref(null)
+
+  async function fetchStats() {
+    try {
+      const { data } = await api.get('/leads/stats')
+      stats.value = data
+    } catch (e) {
+      error.value = e.response?.data?.detail || 'Erro ao carregar métricas'
+    }
+  }
+
   async function fetchCategories() {
     try {
       const { data } = await api.get('/leads/categories')
@@ -73,9 +86,11 @@ export const useLeadsStore = defineStore('leads', () => {
     pageSize,
     filters,
     categories,
+    stats,
     loading,
     error,
     fetchLeads,
+    fetchStats,
     fetchCategories,
     setPage,
     setFilters,

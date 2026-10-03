@@ -31,6 +31,9 @@ class LeadsService:
         )
         return {"items": items, "total": total, "skip": skip, "limit": limit}
 
+    def get_stats(self, user_id: int) -> dict:
+        return self.repository.get_stats(user_id)
+
     def get_categories(self, user_id: int) -> list[str]:
         return self.repository.get_distinct_categories(user_id)
 
