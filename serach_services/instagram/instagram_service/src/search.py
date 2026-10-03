@@ -35,6 +35,12 @@ SEARCH_BOX = "textarea[name=q], input[name=q]"
 NEXT_SELECTORS = ("a#pnnext", "a[aria-label*='Pr']", "a[aria-label*='Next']")
 NEXT_TEXTS = ("Próxima", "Mais resultados", "Next", "More results")
 
+# nodriver gives Chrome under three seconds to open its debugging port, with no
+# setting to raise it. A cold start on the persisted profile, the first run
+# after the service sat idle, can take longer. The retry then finds the files
+# in the page cache and comes up in under a second.
+LAUNCH_ATTEMPTS = 3
+
 
 class Blocked(Exception):
     """Google served a block page instead of results."""
@@ -51,9 +57,12 @@ def release_profile(profile_dir: str) -> None:
     Only browsers opened on this exact profile are killed, so nothing else on
     the machine is touched. Assumes one browser per profile, which holds while
     one operation runs at a time.
+
+    The `--` matters: without it pkill reads the pattern, which starts with
+    dashes, as one of its own options and kills nothing.
     """
     subprocess.run(
-        ["pkill", "-f", f"--user-data-dir={profile_dir}"],
+        ["pkill", "-f", "--", f"--user-data-dir={profile_dir}"],
         check=False,
         capture_output=True,
     )
@@ -94,17 +103,27 @@ class GoogleSearch:
             ],
         }
         if self.profile_dir:
-            release_profile(self.profile_dir)
             options["user_data_dir"] = self.profile_dir
 
-        try:
-            self.browser = await uc.start(**options)
-        except Exception:
-            # A launch that fails part way still leaves Chrome running and
-            # holding the profile. Left alone it would break every later run.
+        for attempt in range(1, LAUNCH_ATTEMPTS + 1):
             if self.profile_dir:
                 release_profile(self.profile_dir)
-            raise
+            try:
+                self.browser = await uc.start(**options)
+                return
+            except Exception:
+                # A launch that fails part way still leaves Chrome running and
+                # holding the profile. Left alone it would break every later run.
+                if self.profile_dir:
+                    release_profile(self.profile_dir)
+                if attempt == LAUNCH_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "chrome did not answer in time, launch attempt %d of %d",
+                    attempt,
+                    LAUNCH_ATTEMPTS,
+                )
+                await asyncio.sleep(2)
 
     async def stop(self) -> None:
         if self.browser:
