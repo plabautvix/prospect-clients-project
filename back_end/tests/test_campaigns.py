@@ -416,3 +416,92 @@ class TestSending:
         assert whatsapp["health"] == "disconnected"
         assert whatsapp["qr_code"] == "data:image/png;base64,AAA"
         assert whatsapp["worker_online"] is True
+
+
+class TestLeadsAndCampaigns:
+    def test_leads_show_what_was_sent_and_can_be_filtered_by_it(self, client, db, clock):
+        auth, ids = _seed(client, db, "contato@test.com", MAPS_LEADS)
+        client.post(
+            "/campaigns",
+            json={"channel": "whatsapp", "template": "Oi", "lead_ids": [ids["Padaria Sol"], ids["Mercado"]]},
+            headers=auth,
+        )
+        sent = _claim(client)["message"]
+        _report(client, sent["id_message"], "sent")
+
+        page = client.get("/leads/", headers=auth).json()
+        contatos = {l["nome"]: l["contatos"] for l in page["items"]}
+        assert contatos["Padaria Sol"][0]["channel"] == "whatsapp"
+        assert contatos["Padaria Sol"][0]["status"] == "enviado"
+        assert contatos["Padaria Sol"][0]["sent_at"].endswith(("Z", "+00:00"))
+        assert contatos["Mercado"][0]["status"] == "na_fila"
+        assert contatos["Barbearia"] == []
+
+        def names(contato):
+            items = client.get("/leads/", params={"contato": contato}, headers=auth).json()["items"]
+            return sorted(l["nome"] for l in items)
+
+        assert names("enviado") == ["Padaria Sol"]
+        assert names("na_fila") == ["Mercado"]
+        assert names("nao_contatado") == ["Barbearia", "Mesma Linha", "Padaria Lua"]
+
+    def test_audience_per_category(self, client, db, clock):
+        auth, ids = _seed(client, db, "audience@test.com", MAPS_LEADS)
+
+        before = {
+            c["categoria"]: c
+            for c in client.get("/campaigns/audience", params={"channel": "whatsapp"}, headers=auth).json()
+        }
+        # padaria: Sol (mobile), Lua (landline), Mesma Linha (same phone as Sol).
+        assert before["padaria"] == {"categoria": "padaria", "total": 3, "elegiveis": 1, "ja_contatados": 0}
+        assert before["mercado"]["elegiveis"] == 1
+        assert before["barbearia"]["elegiveis"] == 0
+
+        client.post(
+            "/campaigns",
+            json={"channel": "whatsapp", "template": "Oi", "filters": {"categoria": ["padaria"]}},
+            headers=auth,
+        )
+
+        after = {
+            c["categoria"]: c
+            for c in client.get("/campaigns/audience", params={"channel": "whatsapp"}, headers=auth).json()
+        }
+        assert after["padaria"]["elegiveis"] == 0
+        assert after["padaria"]["ja_contatados"] == 1
+        assert after["mercado"]["elegiveis"] == 1
+
+    def test_campaign_for_leads_not_yet_contacted(self, client, db, clock):
+        auth, ids = _seed(client, db, "naocontatado@test.com", MAPS_LEADS)
+        client.post(
+            "/campaigns",
+            json={"channel": "whatsapp", "template": "Oi", "lead_ids": [ids["Padaria Sol"]]},
+            headers=auth,
+        )
+
+        preview = client.post(
+            "/campaigns/preview",
+            json={"channel": "whatsapp", "template": "Oi", "filters": {"contato": "nao_contatado"}},
+            headers=auth,
+        ).json()
+
+        assert [s["nome"] for s in preview["samples"]] == ["Mercado"]
+
+    def test_pages_follow_a_fixed_order_and_never_overlap(self, client, db):
+        leads = [{"nome": f"Lead {i:03d}", "categoria": "x"} for i in range(120)]
+        auth, _ = _seed(client, db, "paging@test.com", leads)
+
+        seen = []
+        for skip in (0, 50, 100):
+            page = client.get("/leads/", params={"skip": skip, "limit": 50}, headers=auth).json()
+            seen += [l["id_lead"] for l in page["items"]]
+
+        assert len(seen) == 120
+        assert seen == sorted(seen)
+
+    def test_empty_category_is_not_an_option(self, client, db):
+        auth, _ = _seed(
+            client, db, "emptycat@test.com",
+            [{"nome": "A", "categoria": ""}, {"nome": "B", "categoria": "padaria"}],
+        )
+        assert client.get("/leads/categories", headers=auth).json() == ["padaria"]

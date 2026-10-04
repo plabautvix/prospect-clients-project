@@ -1,5 +1,9 @@
+from datetime import datetime
+from typing import List, Literal, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
+
+ContactFilter = Literal["nao_contatado", "na_fila", "enviado"]
 
 
 class LeadSchema(BaseModel):
@@ -29,10 +33,21 @@ class LeadSchema(BaseModel):
     }
 
 
+class LeadContact(BaseModel):
+    """What this user's campaigns did with the lead on one channel."""
+
+    channel: str
+    status: Literal["enviado", "na_fila", "falhou"]
+    sent_at: Optional[datetime] = None
+
+
 class LeadResponse(LeadSchema):
     id_lead: int = Field(..., description="The primary key of the lead.")
     nao_contatar: bool = Field(
         False, description="Asked not to be contacted; left out of campaigns."
+    )
+    contatos: List[LeadContact] = Field(
+        default_factory=list, description="Messages sent or queued, per channel."
     )
 
     model_config = {"from_attributes": True}

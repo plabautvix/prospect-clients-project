@@ -1,4 +1,10 @@
-from prospect_clients.src.models.schemas.leads import LeadSchema
+from datetime import timezone
+
+from prospect_clients.src.models.schemas.leads import (
+    LeadContact,
+    LeadResponse,
+    LeadSchema,
+)
 from prospect_clients.src.repositories.leads_repository import LeadsRepository
 
 
@@ -17,6 +23,7 @@ class LeadsService:
         endereco: str | None = None,
         site: str | None = None,
         origem: list[str] | None = None,
+        contato: str | None = None,
     ):
         items, total = self.repository.get_by_user(
             user_id,
@@ -28,8 +35,25 @@ class LeadsService:
             endereco=endereco,
             site=site,
             origem=origem,
+            contato=contato,
         )
-        return {"items": items, "total": total, "skip": skip, "limit": limit}
+        contacts = self.repository.contact_status(
+            user_id, [lead.id_lead for lead in items]
+        )
+        rows = []
+        for lead in items:
+            row = LeadResponse.model_validate(lead)
+            row.contatos = [
+                LeadContact(
+                    channel=c["channel"],
+                    status=c["status"],
+                    # Naive UTC from the database, tagged so the browser reads it as UTC.
+                    sent_at=c["sent_at"].replace(tzinfo=timezone.utc) if c["sent_at"] else None,
+                )
+                for c in contacts.get(lead.id_lead, [])
+            ]
+            rows.append(row)
+        return {"items": rows, "total": total, "skip": skip, "limit": limit}
 
     def get_stats(self, user_id: int) -> dict:
         return self.repository.get_stats(user_id)

@@ -2,7 +2,16 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from prospect_clients.src.models.tables.campaigns import Campaign, OutboundMessage
 from prospect_clients.src.models.tables.leads import Leads, UserLeadHistory
+
+# Status de uma mensagem como a tela de Leads os mostra.
+CONTACT_LABELS = {
+    "sent": "enviado",
+    "pending": "na_fila",
+    "sending": "na_fila",
+    "failed": "falhou",
+}
 
 # Quantas categorias o painel mostra antes de agrupar o resto em "outras".
 TOP_CATEGORIES = 10
@@ -55,6 +64,7 @@ class LeadsRepository:
         endereco: str | None = None,
         site: str | None = None,
         origem: list[str] | None = None,
+        contato: str | None = None,
     ):
         query = (
             self.db.query(Leads)
@@ -81,6 +91,25 @@ class LeadsRepository:
         if origem:
             query = query.filter(Leads.origem.in_(origem))
 
+        # Contato: o que este usuário já mandou para o lead, por qualquer canal.
+        if contato:
+            def leads_with(*statuses):
+                return (
+                    select(OutboundMessage.id_lead)
+                    .join(Campaign, Campaign.id_campaign == OutboundMessage.id_campaign)
+                    .where(Campaign.id_user == user_id)
+                    .where(OutboundMessage.status.in_(statuses))
+                )
+
+            if contato == "enviado":
+                query = query.filter(Leads.id_lead.in_(leads_with("sent")))
+            elif contato == "na_fila":
+                query = query.filter(Leads.id_lead.in_(leads_with("pending", "sending")))
+            elif contato == "nao_contatado":
+                query = query.filter(
+                    Leads.id_lead.notin_(leads_with("pending", "sending", "sent"))
+                )
+
         return query.distinct()
 
     def get_by_user(
@@ -94,6 +123,7 @@ class LeadsRepository:
         endereco: str | None = None,
         site: str | None = None,
         origem: list[str] | None = None,
+        contato: str | None = None,
     ) -> tuple[list[Leads], int]:
         query = self._filtered_query(
             user_id,
@@ -103,10 +133,54 @@ class LeadsRepository:
             endereco=endereco,
             site=site,
             origem=origem,
+            contato=contato,
         )
         total = query.count()
-        items = query.offset(skip).limit(limit).all()
+        # Without an explicit order the database may return pages that
+        # overlap or skip rows: LIMIT/OFFSET only mean something over a sort.
+        items = query.order_by(Leads.id_lead).offset(skip).limit(limit).all()
         return items, total
+
+    def contact_status(
+        self, user_id: int, lead_ids: list[int]
+    ) -> dict[int, list[dict]]:
+        """Per lead, what this user's campaigns did on each channel.
+
+        One entry per channel, the one that matters most: sent beats queued,
+        queued beats failed. Cancelled messages are left out, nothing went.
+        """
+        if not lead_ids:
+            return {}
+        rows = self.db.execute(
+            select(
+                OutboundMessage.id_lead,
+                OutboundMessage.channel,
+                OutboundMessage.status,
+                OutboundMessage.sent_at,
+            )
+            .join(Campaign, Campaign.id_campaign == OutboundMessage.id_campaign)
+            .where(Campaign.id_user == user_id)
+            .where(OutboundMessage.id_lead.in_(lead_ids))
+            .where(OutboundMessage.status != "cancelled")
+        )
+        rank = {"sent": 0, "sending": 1, "pending": 1, "failed": 2}
+        best: dict[tuple[int, str], tuple] = {}
+        for lead_id, channel, status, sent_at in rows:
+            key = (lead_id, channel)
+            current = best.get(key)
+            if current is None or rank[status] < rank[current[0]]:
+                best[key] = (status, sent_at)
+
+        result: dict[int, list[dict]] = {}
+        for (lead_id, channel), (status, sent_at) in sorted(best.items()):
+            result.setdefault(lead_id, []).append(
+                {
+                    "channel": channel,
+                    "status": CONTACT_LABELS[status],
+                    "sent_at": sent_at,
+                }
+            )
+        return result
 
     def get_all_by_user(
         self,
@@ -220,6 +294,7 @@ class LeadsRepository:
             .join(UserLeadHistory, UserLeadHistory.lead_id == Leads.id_lead)
             .filter(UserLeadHistory.user_id == user_id)
             .filter(Leads.categoria.isnot(None))
+            .filter(Leads.categoria != "")
             .distinct()
             .order_by(Leads.categoria)
             .all()

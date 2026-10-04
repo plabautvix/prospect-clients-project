@@ -18,6 +18,7 @@ from prospect_clients.src.models.schemas.campaigns import (
     CampaignCreated,
     CampaignPreview,
     CampaignResponse,
+    CategoryAudience,
     ChannelStatus,
     ClaimedMessage,
     ClaimResponse,
@@ -70,6 +71,44 @@ class CampaignsService:
 
     # ─── Building a campaign ─────────────────────────────────────────────────
 
+    def _triage(
+        self, user_id: int, channel: str, leads: list[Leads]
+    ) -> list[tuple[Leads, str | None, str | None]]:
+        """For each lead: (lead, recipient, why it is left out or None).
+
+        The single source of who gets a message, so the counts the screen
+        shows before a campaign are exactly what the campaign will send.
+        """
+        # The opt out belongs to the person, not to one row: the same phone or
+        # profile can come back as another lead from a later search.
+        opted_out = {
+            recipient_for(channel, lead)
+            for lead in self.repository.leads.get_do_not_contact(user_id)
+        }
+
+        triaged: list[list] = []
+        seen: set[str] = set()
+        for lead in leads:
+            recipient = recipient_for(channel, lead)
+            if lead.nao_contatar or (recipient and recipient in opted_out):
+                reason = "nao_contatar"
+            elif recipient is None:
+                reason = "sem_contato"
+            elif recipient in seen:
+                reason = "duplicado"
+            else:
+                reason = None
+                seen.add(recipient)
+            triaged.append([lead, recipient, reason])
+
+        contacted = self.repository.contacted_recipients(
+            user_id, channel, [r for _, r, why in triaged if why is None]
+        )
+        for row in triaged:
+            if row[2] is None and row[1] in contacted:
+                row[2] = "ja_contatado"
+        return [tuple(row) for row in triaged]
+
     def _plan(
         self, user_id: int, data: CampaignCreate
     ) -> tuple[list[tuple[Leads, str]], SkippedCounts]:
@@ -79,36 +118,38 @@ class CampaignsService:
             user_id, lead_ids=data.lead_ids, **filters
         )
 
-        # The opt out belongs to the person, not to one row: the same phone or
-        # profile can come back as another lead from a later search.
-        opted_out = {
-            recipient_for(data.channel, lead)
-            for lead in self.repository.leads.get_do_not_contact(user_id)
-        }
-
         skipped = SkippedCounts()
-        candidates: list[tuple[Leads, str]] = []
-        seen: set[str] = set()
-        for lead in leads:
-            recipient = recipient_for(data.channel, lead)
-            if lead.nao_contatar or (recipient and recipient in opted_out):
-                skipped.nao_contatar += 1
-                continue
-            if recipient is None:
-                skipped.sem_contato += 1
-                continue
-            if recipient in seen:
-                skipped.duplicado += 1
-                continue
-            seen.add(recipient)
-            candidates.append((lead, recipient))
-
-        contacted = self.repository.contacted_recipients(
-            user_id, data.channel, [recipient for _, recipient in candidates]
-        )
-        eligible = [(lead, r) for lead, r in candidates if r not in contacted]
-        skipped.ja_contatado = len(candidates) - len(eligible)
+        eligible: list[tuple[Leads, str]] = []
+        for lead, recipient, reason in self._triage(user_id, data.channel, leads):
+            if reason is None:
+                eligible.append((lead, recipient))
+            else:
+                setattr(skipped, reason, getattr(skipped, reason) + 1)
         return eligible, skipped
+
+    def audience(self, user_id: int, channel: str) -> list[CategoryAudience]:
+        """Per category, how many leads a campaign on this channel would reach.
+
+        Lets the user launch a campaign by category without picking leads one
+        by one, and shows how much of each category was already contacted.
+        """
+        leads = self.repository.leads.get_all_by_user(user_id)
+        groups: dict[str, dict[str, int]] = {}
+        for lead, _, reason in self._triage(user_id, channel, leads):
+            if not lead.categoria:
+                continue
+            group = groups.setdefault(
+                lead.categoria, {"total": 0, "elegiveis": 0, "ja_contatados": 0}
+            )
+            group["total"] += 1
+            if reason is None:
+                group["elegiveis"] += 1
+            elif reason == "ja_contatado":
+                group["ja_contatados"] += 1
+        return sorted(
+            (CategoryAudience(categoria=name, **counts) for name, counts in groups.items()),
+            key=lambda c: (-c.elegiveis, c.categoria.lower()),
+        )
 
     def preview(self, user_id: int, data: CampaignCreate) -> CampaignPreview:
         eligible, skipped = self._plan(user_id, data)

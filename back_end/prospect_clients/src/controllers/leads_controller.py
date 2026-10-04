@@ -6,6 +6,7 @@ from prospect_clients.src.configurations.dependencies import service_provider
 from prospect_clients.src.utils.security import get_current_user, require_service
 from prospect_clients.src.models.schemas.campaigns import DoNotContactUpdate
 from prospect_clients.src.models.schemas.leads import (
+    ContactFilter,
     LeadSchema,
     LeadsPage,
     LeadsStats,
@@ -32,6 +33,7 @@ def list_leads(
     endereco: str | None = None,
     site: str | None = None,
     origem: List[str] | None = Query(None),
+    contato: ContactFilter | None = None,
     service: LeadsService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
 ):
@@ -45,6 +47,7 @@ def list_leads(
         endereco=endereco,
         site=site,
         origem=origem,
+        contato=contato,
     )
 
 

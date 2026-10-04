@@ -15,6 +15,7 @@ class CampaignLeadFilters(BaseModel):
     endereco: Optional[str] = None
     site: Optional[str] = None
     origem: Optional[List[str]] = None
+    contato: Optional[Literal["nao_contatado", "na_fila", "enviado"]] = None
 
 
 class CampaignCreate(BaseModel):
@@ -50,6 +51,15 @@ class SkippedCounts(BaseModel):
     nao_contatar: int = Field(0, description="Lead marked as do not contact.")
     ja_contatado: int = Field(0, description="Already messaged on this channel.")
     duplicado: int = Field(0, description="Same recipient twice in the selection.")
+
+
+class CategoryAudience(BaseModel):
+    """How a category would fare in a campaign on one channel."""
+
+    categoria: str
+    total: int = Field(..., description="Leads of the user in the category.")
+    elegiveis: int = Field(..., description="Would get a message on this channel now.")
+    ja_contatados: int = Field(..., description="Already messaged on this channel.")
 
 
 class MessageSample(BaseModel):

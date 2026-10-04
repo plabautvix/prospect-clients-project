@@ -10,6 +10,7 @@ from prospect_clients.src.models.schemas.campaigns import (
     CampaignCreated,
     CampaignPreview,
     CampaignResponse,
+    CategoryAudience,
     Channel,
     ChannelStatus,
     MessagesPage,
@@ -67,6 +68,21 @@ def list_campaigns(
     current_user: dict = Depends(get_current_user),
 ):
     return service.list_campaigns(current_user["user_id"])
+
+
+# Declared before /campaigns/{campaign_id}, which would otherwise take
+# "audience" as an id and reject it.
+@router.get(
+    "/campaigns/audience",
+    response_model=List[CategoryAudience],
+    summary="Per category, how many leads a campaign on a channel would reach",
+)
+def campaign_audience(
+    channel: Channel,
+    service: CampaignsService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
+):
+    return service.audience(current_user["user_id"], channel)
 
 
 @router.get("/campaigns/{campaign_id}", response_model=CampaignResponse)
