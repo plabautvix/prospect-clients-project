@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Integer, String
 
@@ -86,3 +86,10 @@ class SenderChannel(Base):
     reconnect_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+    # Instagram asked for a verification code on login, and the worker is
+    # waiting on that screen. The code the user types is kept here only until
+    # the worker's next health report takes it.
+    needs_code: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    verification_code: Mapped[str | None] = mapped_column(String(20), nullable=True)

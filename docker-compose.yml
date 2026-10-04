@@ -127,6 +127,27 @@ services:
       - waha
       - backend
 
+  # Envia as mensagens de Instagram (DM) das campanhas, com um Chrome logado na
+  # conta remetente. Perfil de Chrome próprio, separado do instagram-service:
+  # a busca não usa conta, e uma restrição nesta conta não pode atingi-la.
+  instagram-dm:
+    build: ./sender_services/instagram_dm
+    shm_size: 1gb
+    # Digitar uma mensagem longa leva mais que os 10s padrão. Com folga, o
+    # SIGTERM termina e reporta a mensagem em mãos em vez de matar no meio.
+    stop_grace_period: 2m
+    environment:
+      INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
+      INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
+      CHROME_PROFILE_DIR: /data/chrome-profile
+      BACKEND_API_URL: http://backend:8000
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
+    volumes:
+      - ./sender_services/instagram_dm/src:/app/src
+      - instagram-dm-profile:/data/chrome-profile
+    depends_on:
+      - backend
+
   frontend:
     build: ./front_end
     ports:
@@ -137,3 +158,4 @@ services:
 volumes:
   instagram-chrome-profile:
   waha-sessions:
+  instagram-dm-profile:

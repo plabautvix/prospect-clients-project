@@ -1,0 +1,5 @@
+# Específico deste serviço. O resto vem do .gitignore da raiz.
+
+# Perfil do Chrome logado na conta remetente: contém o cookie de sessão.
+chrome-profile/
+.chrome-profile/

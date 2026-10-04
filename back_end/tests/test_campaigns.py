@@ -380,8 +380,28 @@ class TestSending:
 
         first = client.post("/outbox/whatsapp/health", json=disconnected, headers=SERVICE)
         second = client.post("/outbox/whatsapp/health", json=disconnected, headers=SERVICE)
-        assert first.json() == {"reconnect": True}
-        assert second.json() == {"reconnect": False}
+        assert first.json()["reconnect"] is True
+        assert second.json()["reconnect"] is False
+
+    def test_verification_code_is_handed_to_the_worker_once(self, client, db, clock):
+        auth, _ = _campaign(client, db, clock)
+        waiting = {"state": "disconnected", "detail": "Codigo", "needs_code": True}
+        client.post("/outbox/instagram/health", json=waiting, headers=SERVICE)
+
+        status = client.post(
+            "/channels/instagram/verification-code", json={"code": "123 456"}, headers=auth
+        ).json()
+        assert status["needs_code"] is True
+        assert status["code_pending"] is True
+
+        first = client.post("/outbox/instagram/health", json=waiting, headers=SERVICE)
+        second = client.post("/outbox/instagram/health", json=waiting, headers=SERVICE)
+        assert first.json()["verification_code"] == "123456"
+        assert second.json()["verification_code"] is None
+
+        client.post("/outbox/instagram/health", json={"state": "ok"}, headers=SERVICE)
+        instagram = client.get("/channels", headers=auth).json()[1]
+        assert instagram["needs_code"] is False
 
     def test_qr_code_reaches_the_ui(self, client, db, clock):
         auth, _ = _campaign(client, db, clock)

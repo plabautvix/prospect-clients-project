@@ -13,6 +13,7 @@ from prospect_clients.src.models.schemas.campaigns import (
     Channel,
     ChannelStatus,
     MessagesPage,
+    VerificationCode,
 )
 from prospect_clients.src.repositories.campaigns_repository import CampaignsRepository
 from prospect_clients.src.services.campaigns_service import CampaignsService
@@ -146,6 +147,24 @@ def reconnect_channel(
     _: dict = Depends(get_current_user),
 ):
     return service.request_reconnect(channel)
+
+
+@router.post(
+    "/channels/{channel}/verification-code",
+    response_model=ChannelStatus,
+    summary="Hand the login verification code to the sender worker",
+    description=(
+        "Instagram may ask for a code sent by e-mail or SMS when the sender "
+        "account logs in. The worker types it on its next health report."
+    ),
+)
+def submit_verification_code(
+    channel: Channel,
+    data: VerificationCode,
+    service: CampaignsService = Depends(_get_service),
+    _: dict = Depends(get_current_user),
+):
+    return service.submit_verification_code(channel, data.code)
 
 
 @router.post(

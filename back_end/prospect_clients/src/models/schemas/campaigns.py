@@ -124,6 +124,12 @@ class ChannelStatus(BaseModel):
     reconnect_pending: bool = Field(
         False, description="A new QR code was asked for and the worker has not taken it yet."
     )
+    needs_code: bool = Field(
+        False, description="The platform asked for a login verification code."
+    )
+    code_pending: bool = Field(
+        False, description="A code was typed and the worker has not taken it yet."
+    )
 
 
 # ─── Service side (X-Service-Key) ─────────────────────────────────────────────
@@ -162,12 +168,22 @@ class HealthReport(BaseModel):
     pause_minutes: Optional[int] = Field(
         None, description="For blocked: how long to stop. Defaults to the channel setting."
     )
+    needs_code: bool = Field(
+        False, description="Waiting on a login verification code (Instagram)."
+    )
 
 
 class HealthAck(BaseModel):
     reconnect: bool = Field(
         False, description="The user asked for a fresh session: restart it now."
     )
+    verification_code: Optional[str] = Field(
+        None, description="Login verification code typed by the user, handed over once."
+    )
+
+
+class VerificationCode(BaseModel):
+    code: str = Field(..., min_length=4, max_length=20, pattern=r"^[0-9A-Za-z ]+$")
 
 
 class DoNotContactUpdate(BaseModel):

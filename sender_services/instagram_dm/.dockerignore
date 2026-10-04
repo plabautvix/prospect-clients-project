@@ -1,0 +1,6 @@
+.env
+tests/
+scripts/
+chrome-profile/
+.pytest_cache/
+**/__pycache__/

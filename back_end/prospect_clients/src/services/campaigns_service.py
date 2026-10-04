@@ -276,6 +276,8 @@ class CampaignsService:
             daily_cap=pacing.daily_cap,
             queued=self.repository.queued(channel),
             reconnect_pending=state.reconnect_requested_at is not None,
+            needs_code=state.needs_code,
+            code_pending=state.verification_code is not None,
         )
 
     def unpause_channel(self, channel: str) -> ChannelStatus:
@@ -293,6 +295,13 @@ class CampaignsService:
         self.repository.save()
         return self.channel_status(channel)
 
+    def submit_verification_code(self, channel: str, code: str) -> ChannelStatus:
+        """Keep the login code the user typed until the worker picks it up."""
+        state = self.repository.get_channel(channel)
+        state.verification_code = code.replace(" ", "")
+        self.repository.save()
+        return self.channel_status(channel)
+
     def report_health(self, channel: str, report: HealthReport) -> HealthAck:
         now = utcnow()
         state = self.repository.get_channel(channel)
@@ -304,11 +313,15 @@ class CampaignsService:
             minutes = report.pause_minutes or PACING[channel].block_pause_hours * 60
             state.paused_until = now + timedelta(minutes=minutes)
 
-        # Handed over once: the worker restarts the session as it reads this.
+        state.needs_code = report.state == "disconnected" and report.needs_code
+
+        # Handed over once: the worker acts on them as it reads the answer.
         reconnect = state.reconnect_requested_at is not None
+        code = state.verification_code
         state.reconnect_requested_at = None
+        state.verification_code = None
         self.repository.save()
-        return HealthAck(reconnect=reconnect)
+        return HealthAck(reconnect=reconnect, verification_code=code)
 
     # ─── Sending (called by the workers) ─────────────────────────────────────
 
