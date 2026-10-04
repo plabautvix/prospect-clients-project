@@ -96,6 +96,14 @@ async function reconnect(channel) {
   }
 }
 
+const codes = reactive({})
+async function sendCode(channel) {
+  await store.submitVerificationCode(channel, codes[channel].trim())
+  codes[channel] = ''
+  // O worker digita o código e espera o Instagram responder.
+  setTimeout(store.fetchChannels, 15000)
+}
+
 const busy = ref(null)
 async function act(action, campaign) {
   if (action === 'cancel' && !confirm(`Cancelar "${campaign.name}"? O que ainda não saiu não será enviado.`)) {
@@ -168,6 +176,43 @@ onUnmounted(() => clearInterval(timer))
             @click="reconnect(c.channel)"
           >
             Gerar novo QR code
+          </button>
+        </div>
+
+        <!-- Instagram: código de verificação do login, ou nova tentativa de
+             entrar depois de corrigir o que o aviso acima pediu. -->
+        <form
+          v-if="c.channel === 'instagram' && c.worker_online && c.needs_code"
+          class="flex gap-2"
+          @submit.prevent="sendCode(c.channel)"
+        >
+          <input
+            v-model="codes[c.channel]"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="20"
+            placeholder="Código de verificação"
+            class="input"
+            :disabled="c.code_pending"
+          />
+          <button class="btn-primary shrink-0 text-xs" :disabled="c.code_pending || !codes[c.channel]?.trim()">
+            {{ c.code_pending ? 'Enviando…' : 'Enviar código' }}
+          </button>
+        </form>
+        <div
+          v-else-if="c.channel === 'instagram' && c.worker_online && c.health === 'disconnected'"
+          class="flex items-center justify-between gap-3"
+        >
+          <p class="text-xs text-txt-secondary/70">
+            {{ c.reconnect_pending ? 'Tentando entrar, aguarde alguns segundos…' : 'Resolveu o que o aviso pede?' }}
+          </p>
+          <button
+            class="btn-secondary shrink-0 text-xs"
+            :disabled="c.reconnect_pending || reconnecting === c.channel"
+            @click="reconnect(c.channel)"
+          >
+            Entrar novamente
           </button>
         </div>
 

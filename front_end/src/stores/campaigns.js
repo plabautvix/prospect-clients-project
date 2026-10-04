@@ -107,6 +107,14 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     if (i !== -1) channels.value[i] = data
   }
 
+  // Código que o Instagram mandou por e-mail ou SMS. Segue o mesmo caminho
+  // do pedido de QR: o worker o pega no próximo ciclo.
+  async function submitVerificationCode(channel, code) {
+    const { data } = await api.post(`/channels/${channel}/verification-code`, { code })
+    const i = channels.value.findIndex((c) => c.channel === channel)
+    if (i !== -1) channels.value[i] = data
+  }
+
   async function unpauseChannel(channel) {
     await api.post(`/channels/${channel}/unpause`)
     await fetchChannels()
@@ -134,6 +142,7 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     cancel,
     fetchMessages,
     reconnectChannel,
+    submitVerificationCode,
     unpauseChannel,
     setDoNotContact,
   }
