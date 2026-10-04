@@ -141,6 +141,34 @@ def _center_of_text_js(texts: tuple[str, ...]) -> str:
 }})()"""
 
 
+def _textbox_count_js() -> str:
+    return f"document.querySelectorAll('{TEXTBOX[0]}').length"
+
+
+def _chat_is_with_js(handle: str) -> str:
+    """JS: is the open conversation the one with this profile?
+
+    Climbs from the message box to the nearest block holding links, which is
+    the chat itself, and judges on that block alone. Climbing further would
+    reach the profile page around it, which links to the profile whatever
+    chat is open, and would approve the wrong conversation.
+    """
+    return f"""(() => {{
+  const handle = {json.dumps(handle.lower())};
+  let el = document.querySelector('{TEXTBOX[0]}');
+  for (let i = 0; i < 20 && el; i++) {{
+    el = el.parentElement;
+    if (!el) return false;
+    const links = [...el.querySelectorAll('a[href]')];
+    if (!links.length) continue;
+    return links
+      .map((a) => a.getAttribute('href').toLowerCase().replace(/\\/+$/, ''))
+      .some((href) => href === '/' + handle || href.endsWith('/' + handle));
+  }}
+  return false;
+}})()"""
+
+
 class InstagramDM:
     def __init__(
         self,
@@ -505,11 +533,18 @@ class InstagramDM:
         await self._pause(3, 6)
         await self._check_page()
 
+        # A conversa já aberta antes do clique seria de outra pessoa.
+        if await self._eval(_textbox_count_js()):
+            raise TransientError("Havia outra conversa aberta; nada foi digitado.")
+
         if not await self._click_text(MESSAGE_BUTTON, timeout=8):
             raise PermanentError("O perfil não mostra o botão de mensagem.")
 
+        # Since 2026 the button opens a floating chat over the profile instead
+        # of navigating to /direct/. Either way, the conversation is ready
+        # when its text box shows up.
         deadline = time.monotonic() + 20
-        while "/direct/" not in (await self._visible())[0]:
+        while not await self._eval(_textbox_count_js()):
             if time.monotonic() >= deadline:
                 await self._check_page()
                 raise TransientError("A conversa não abriu.")
@@ -518,7 +553,17 @@ class InstagramDM:
         await self._pause(2, 4)
         await self._dismiss_prompts()
 
-        box = await self._first(TEXTBOX, timeout=15)
+        # Never type without knowing whose conversation this is: one box, and
+        # it belongs to a chat that links to this profile.
+        if await self._eval(_textbox_count_js()) != 1:
+            raise TransientError("Mais de uma conversa aberta; nada foi digitado.")
+        if not await self._eval(_chat_is_with_js(handle)):
+            raise TransientError(
+                f"Não deu para confirmar que a conversa aberta é com @{handle}; "
+                "nada foi digitado."
+            )
+
+        box = await self._first(TEXTBOX, timeout=5)
         if box is None:
             await self._check_page()
             raise TransientError("A caixa de mensagem não apareceu.")
