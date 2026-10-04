@@ -11,7 +11,7 @@ A aplicação coleta *leads* a partir de uma busca, por duas fontes: Google Maps
 Google). Sobre esses leads o usuário cria **campanhas**: envios em lote por
 WhatsApp (leads com celular) ou Instagram (perfis), entregues aos poucos, em lotes
 e em horário comercial. Cada mensagem é gravada no banco antes de sair, então nada
-se perde se algum serviço cair (ver 4.5). É composta por cinco serviços, um
+se perde se algum serviço cair (ver 4.5). É composta por seis serviços, um
 gateway de WhatsApp e um broker MQTT, orquestrados por `docker-compose.yml`.
 
 | Serviço | Stack | Porta (host) | Responsabilidade |
@@ -22,6 +22,7 @@ gateway de WhatsApp e um broker MQTT, orquestrados por `docker-compose.yml`.
 | `instagram-service` | Python + nodriver/Chrome | — | Busca perfis do Instagram pelo índice do Google e grava leads na API |
 | `whatsapp-sender` | Python | — | Envia as mensagens de WhatsApp das campanhas, uma por vez, no ritmo que o backend define |
 | `waha` | WAHA Core (WhatsApp Web) | — | Gateway do WhatsApp; só o `whatsapp-sender` fala com ele |
+| `instagram-dm` | Python + nodriver/Chrome | — | Envia as mensagens de Instagram (DM) das campanhas, com um Chrome logado na conta remetente |
 | `mosquitto` | Eclipse Mosquitto (MQTT) | 11883 | Bus de comando backend → serviços de scraping |
 
 ## 2. Diagrama de componentes
@@ -36,6 +37,7 @@ flowchart LR
     IG[instagram-service\nnodriver/Chrome]
     WS[whatsapp-sender]
     WAHA[waha\nWhatsApp Web]
+    DM[instagram-dm\nnodriver/Chrome]
     DB[(SQLite test.db)]
 
     User -->|HTTP + JWT| FE
@@ -48,6 +50,7 @@ flowchart LR
     IG -->|POST /leads?user_id, PATCH status\nX-Service-Key| BE
     WS -->|POST /outbox/whatsapp/claim\nresult, health\nX-Service-Key| BE
     WS -->|REST + X-Api-Key| WAHA
+    DM -->|POST /outbox/instagram/claim\nresult, health\nX-Service-Key| BE
 ```
 
 ## 3. Serviços em detalhe
@@ -64,7 +67,8 @@ flowchart LR
   - `POST /automations/operations/maps/activate`, `PUT /automations/operations/maps/deactivate`
   - `POST /automations/operations/instagram/activate`, `PUT /automations/operations/instagram/deactivate`
   - `POST /campaigns/preview`, `POST/GET /campaigns`, `GET /campaigns/{id}[/messages]`,
-    `POST /campaigns/{id}/pause|resume|cancel`, `GET /channels`, `POST /channels/{c}/unpause`
+    `POST /campaigns/{id}/pause|resume|cancel`, `GET /channels`, `POST /channels/{c}/unpause`,
+    `POST /channels/{c}/reconnect`, `POST /channels/{c}/verification-code`
   - `POST /leads/do-not-contact`
   - Só serviço (`X-Service-Key`): `POST /outbox/{channel}/claim`,
     `POST /outbox/messages/{id}/result`, `POST /outbox/{channel}/health`
@@ -77,6 +81,8 @@ flowchart LR
   - `0002_add_operations_source` adiciona `operations.source`.
   - `0005_add_campaigns` cria `campaigns`, `outbound_messages`, `sender_channels`
     e `leads.nao_contatar`.
+  - `0006` e `0007` dão a `sender_channels` os pedidos que vêm da tela: novo QR
+    code / novo login, e o código de verificação do Instagram.
 - **`operations.source`** ("maps" ou "instagram") diz ao front qual endpoint de
   deactivate chamar, para que parar uma operação continue funcionando depois de
   um reload.
@@ -124,8 +130,24 @@ flowchart LR
   `POST /outbox/whatsapp/health` e a tela de Campanhas o mostra. A sessão fica no
   volume `waha-sessions`.
 - O `waha` não publica porta: só o worker o alcança, pela rede do compose (S4).
-- Envio por Instagram (DM) ainda não existe: o canal já está no modelo e na API,
-  falta o worker (`instagram-dm`, com perfil de Chrome próprio, separado da busca).
+
+### 3.6 instagram-dm
+- **Por que navegador:** a API oficial do Instagram só deixa uma empresa responder
+  quem escreveu primeiro. Abordar um lead é fazer o que uma pessoa faz: abrir o
+  perfil, clicar em Mensagem, digitar e dar Enter, com um Chrome real (nodriver,
+  com interface sob Xvfb, como a busca).
+- **Mesmo contrato do WhatsApp:** sem estado, `claim` → envia → reporta. Um
+  "Tente novamente mais tarde" vira `blocked`, e o backend pausa o canal por 24h.
+- **Login:** usuário e senha da conta dedicada vêm do `.env` do compose, nunca do
+  banco. Se o Instagram pedir código por e-mail/SMS, a tela de Campanhas mostra um
+  campo; o código vai para `sender_channels` e o worker o pega no próximo report de
+  saúde. O worker nunca repete um login sozinho: senha recusada ou código pendente
+  esperam o usuário, porque logins repetidos são o que trava a conta.
+- **Perfil de Chrome próprio** (volume `instagram-dm-profile`), separado do
+  `instagram-service`: a busca não usa conta, e uma restrição nesta conta não pode
+  atingi-la.
+- As telas são reconhecidas pelo texto visível (`pages.py`), nunca pelo HTML, que
+  traz todos os textos do app dentro dos scripts.
 
 ## 4. Fluxos principais
 
