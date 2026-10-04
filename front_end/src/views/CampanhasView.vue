@@ -1,8 +1,15 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useCampaignsStore, channelLabel } from '@/stores/campaigns'
+import NewCampaignModal from '@/components/campaigns/NewCampaignModal.vue'
 
 const store = useCampaignsStore()
+
+const creating = ref(false)
+function onCreated() {
+  creating.value = false
+  refresh()
+}
 
 const CAMPAIGN_STATUS = {
   running: { label: 'Enviando', badge: 'badge-brand' },
@@ -134,12 +141,22 @@ onUnmounted(() => clearInterval(timer))
 
 <template>
   <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-extrabold text-txt-primary">Campanhas</h1>
-      <p class="mt-1 text-sm text-txt-secondary">
-        Mensagens enviadas em lote. Para criar uma, selecione leads na tela de Leads.
-      </p>
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-txt-primary">Campanhas</h1>
+        <p class="mt-1 text-sm text-txt-secondary">
+          Mensagens enviadas em lote. Escolha as categorias aqui, ou selecione leads na tela de Leads.
+        </p>
+      </div>
+      <button class="btn-primary shrink-0" @click="creating = true">Nova campanha</button>
     </div>
+
+    <NewCampaignModal
+      v-if="creating"
+      by-category
+      @close="creating = false"
+      @created="onCreated"
+    />
 
     <!-- Contas remetentes -->
     <div class="grid gap-4 md:grid-cols-2">

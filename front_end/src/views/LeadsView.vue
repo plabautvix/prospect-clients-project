@@ -26,7 +26,29 @@ function toggleOrigem(id) {
 }
 
 // Filtros locais (espelham os campos do servidor), aplicados com debounce
-const localFilters = reactive({ nome: '', categoria: [], telefone: '', endereco: '', site: '', origem: [] })
+const localFilters = reactive({ nome: '', categoria: [], telefone: '', endereco: '', site: '', origem: [], contato: '' })
+
+// O que as campanhas já fizeram com o lead.
+const CONTACT_FILTERS = [
+  { id: '', label: 'Todos' },
+  { id: 'nao_contatado', label: 'Não contatados' },
+  { id: 'na_fila', label: 'Na fila' },
+  { id: 'enviado', label: 'Já enviados' },
+]
+
+const CONTACT_STATUS = {
+  enviado: { label: 'enviada', class: 'bg-emerald-500/10 text-emerald-400' },
+  na_fila: { label: 'na fila', class: 'bg-white/10 text-txt-secondary' },
+  falhou: { label: 'falhou', class: 'bg-red-500/10 text-red-400' },
+}
+
+function contactText(c) {
+  const channel = c.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram'
+  const when = c.sent_at
+    ? ` ${new Date(c.sent_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+    : ''
+  return `${channel}: ${CONTACT_STATUS[c.status].label}${when}`
+}
 
 // Multiselect de categoria — painel é teleportado para o body para escapar
 // dos stacking contexts dos cards (backdrop-filter cria contexto próprio).
@@ -355,6 +377,25 @@ async function toggleDoNotContact() {
           <label class="label">Site</label>
           <input v-model="localFilters.site" type="text" placeholder="Buscar por site…" class="input" />
         </div>
+        <div class="sm:col-span-2 lg:col-span-3">
+          <label class="label">Contato</label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="f in CONTACT_FILTERS"
+              :key="f.id"
+              type="button"
+              @click="localFilters.contato = f.id"
+              :class="[
+                'rounded-xl border px-3 py-2 text-sm font-medium transition',
+                localFilters.contato === f.id
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-brd-light text-txt-secondary hover:bg-surface-hover',
+              ]"
+            >
+              {{ f.label }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -376,6 +417,7 @@ async function toggleDoNotContact() {
               </th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8a918c]">Nome</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8a918c]">Telefone</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8a918c]">Contato</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8a918c] hidden md:table-cell">Categoria</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8a918c] hidden lg:table-cell">Endereço</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#8a918c] hidden lg:table-cell">Site</th>
@@ -418,6 +460,18 @@ async function toggleDoNotContact() {
               <td class="px-4 py-3 text-[#a1a8a4]">
                 <span v-if="lead.telefone">{{ lead.telefone }}</span>
                 <span v-else class="text-[#4a524d]">—</span>
+              </td>
+              <td class="px-4 py-3">
+                <div v-if="lead.contatos?.length" class="flex flex-col gap-1">
+                  <span
+                    v-for="c in lead.contatos"
+                    :key="c.channel"
+                    :class="['w-fit whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium', CONTACT_STATUS[c.status].class]"
+                  >
+                    {{ contactText(c) }}
+                  </span>
+                </div>
+                <span v-else class="text-xs text-[#4a524d]">nenhum</span>
               </td>
               <td class="px-4 py-3 hidden md:table-cell">
                 <span v-if="lead.categoria" class="badge-blue">{{ lead.categoria }}</span>

@@ -61,6 +61,12 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     }
   }
 
+  // Por categoria: quantos leads uma campanha neste canal alcançaria.
+  async function fetchAudience(channel) {
+    const { data } = await api.get('/campaigns/audience', { params: { channel } })
+    return data
+  }
+
   async function preview(payload) {
     const { data } = await api.post('/campaigns/preview', payload)
     return data
@@ -135,6 +141,7 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     error,
     fetchCampaigns,
     fetchChannels,
+    fetchAudience,
     preview,
     create,
     pause,

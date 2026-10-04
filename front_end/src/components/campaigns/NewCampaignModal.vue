@@ -6,8 +6,11 @@ const props = defineProps({
   // Leads marcados à mão. Vazio significa "todos os leads do filtro".
   leadIds: { type: Array, default: () => [] },
   filters: { type: Object, default: () => ({}) },
-  targetCount: { type: Number, required: true },
+  targetCount: { type: Number, default: 0 },
   defaultChannel: { type: String, default: 'whatsapp' },
+  // Público escolhido por categoria dentro do próprio modal, em vez de vir
+  // da seleção ou do filtro da tela de Leads.
+  byCategory: { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'created'])
 
@@ -39,19 +42,67 @@ const skippedList = computed(() => {
     })
 })
 
-const target = computed(() =>
-  props.leadIds.length
+// ─── Público por categoria ─────────────────────────────────────────────────
+// Os números vêm do servidor, pela mesma regra que monta a campanha: o que a
+// lista promete é o que será enviado.
+const audience = ref([])
+const audienceLoading = ref(false)
+const selectedCategories = ref([])
+const categorySearch = ref('')
+
+async function loadAudience() {
+  if (!props.byCategory) return
+  audienceLoading.value = true
+  try {
+    audience.value = await store.fetchAudience(channel.value)
+  } catch (e) {
+    error.value = e.response?.data?.detail || 'Erro ao carregar as categorias'
+  } finally {
+    audienceLoading.value = false
+  }
+}
+
+const visibleAudience = computed(() => {
+  const q = categorySearch.value.trim().toLowerCase()
+  return q ? audience.value.filter((c) => c.categoria.toLowerCase().includes(q)) : audience.value
+})
+
+function toggleCategory(categoria) {
+  const i = selectedCategories.value.indexOf(categoria)
+  if (i === -1) selectedCategories.value.push(categoria)
+  else selectedCategories.value.splice(i, 1)
+}
+
+// Só as que ainda têm alguém para receber: as outras não somariam nada.
+function selectAllWithReach() {
+  selectedCategories.value = visibleAudience.value
+    .filter((c) => c.elegiveis > 0)
+    .map((c) => c.categoria)
+}
+
+const selectedReach = computed(() =>
+  audience.value
+    .filter((c) => selectedCategories.value.includes(c.categoria))
+    .reduce((sum, c) => sum + c.elegiveis, 0)
+)
+
+const target = computed(() => {
+  if (props.byCategory) {
+    const n = selectedCategories.value.length
+    return n ? `${n} categoria(s) selecionada(s)` : 'Escolha as categorias'
+  }
+  return props.leadIds.length
     ? `${props.targetCount} lead(s) selecionado(s)`
     : `Todos os ${props.targetCount} leads do filtro atual`
-)
+})
 
 function payload() {
   return campaignPayload({
     channel: channel.value,
     template: template.value,
     name: name.value.trim(),
-    leadIds: props.leadIds,
-    filters: props.filters,
+    leadIds: props.byCategory ? [] : props.leadIds,
+    filters: props.byCategory ? { categoria: selectedCategories.value } : props.filters,
   })
 }
 
@@ -61,7 +112,7 @@ let timer = null
 let requestId = 0
 function schedulePreview() {
   clearTimeout(timer)
-  if (!template.value.trim()) {
+  if (!template.value.trim() || (props.byCategory && !selectedCategories.value.length)) {
     preview.value = null
     return
   }
@@ -80,7 +131,9 @@ function schedulePreview() {
   }, 400)
 }
 
-watch([channel, template], schedulePreview)
+watch([channel, template, selectedCategories], schedulePreview, { deep: true })
+// Cada canal alcança leads diferentes: celular no WhatsApp, perfil no Instagram.
+watch(channel, loadAudience)
 
 async function submit() {
   submitting.value = true
@@ -102,6 +155,7 @@ function onKeydown(e) {
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  loadAudience()
   schedulePreview()
 })
 onUnmounted(() => {
@@ -147,6 +201,58 @@ onUnmounted(() => {
           </div>
 
           <div>
+            <div v-if="byCategory" class="mb-5">
+              <div class="mb-1.5 flex items-center justify-between gap-3">
+                <label class="label mb-0">Categorias</label>
+                <div class="flex items-center gap-3 text-xs">
+                  <button type="button" class="text-brand hover:underline" @click="selectAllWithReach">
+                    Todas com envio
+                  </button>
+                  <button
+                    v-if="selectedCategories.length"
+                    type="button"
+                    class="text-txt-secondary hover:underline"
+                    @click="selectedCategories = []"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <input v-model="categorySearch" type="text" placeholder="Filtrar categorias…" class="input mb-2 py-1.5 text-sm" />
+              <div class="max-h-64 overflow-auto rounded-xl border border-brd-light">
+                <p v-if="audienceLoading && !audience.length" class="px-3 py-4 text-center text-xs text-txt-secondary/60">
+                  Carregando…
+                </p>
+                <p v-else-if="!visibleAudience.length" class="px-3 py-4 text-center text-xs text-txt-secondary/60">
+                  Nenhuma categoria.
+                </p>
+                <label
+                  v-for="c in visibleAudience"
+                  :key="c.categoria"
+                  :class="[
+                    'flex cursor-pointer items-center gap-3 border-b border-brd-light px-3 py-2 text-sm last:border-b-0',
+                    c.elegiveis === 0 ? 'opacity-50' : 'hover:bg-surface-hover',
+                  ]"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="selectedCategories.includes(c.categoria)"
+                    @change="toggleCategory(c.categoria)"
+                    class="rounded border-brd-light bg-surface text-brand focus:ring-brand/30"
+                  />
+                  <span class="min-w-0 flex-1 truncate text-txt-primary">{{ c.categoria }}</span>
+                  <span class="shrink-0 text-xs text-txt-secondary">
+                    <b class="text-brand">{{ c.elegiveis }}</b> para enviar
+                    <template v-if="c.ja_contatados"> · {{ c.ja_contatados }} já contatados</template>
+                    · {{ c.total }} leads
+                  </span>
+                </label>
+              </div>
+              <p v-if="selectedCategories.length" class="mt-1.5 text-xs text-txt-secondary/70">
+                {{ selectedReach }} mensagens nas categorias selecionadas.
+              </p>
+            </div>
+
             <label class="label">Nome da campanha (opcional)</label>
             <input v-model="name" type="text" maxlength="255" placeholder="Ex.: Padarias Vitória" class="input" />
           </div>
