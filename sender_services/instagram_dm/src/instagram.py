@@ -17,6 +17,7 @@ what gets an account locked.
 import asyncio
 import json
 import logging
+import math
 import random
 import subprocess
 import time
@@ -43,12 +44,19 @@ COOKIE_BANNER = (
     "decline optional cookies",
 )
 
+# The 2026 login form names them email and pass; the older one, username and
+# password. Both are kept, newest first.
+USERNAME_FIELD = ('input[name="email"]', 'input[name="username"]')
+PASSWORD_FIELD = ('input[name="pass"]', 'input[name="password"]')
+LOGIN_BUTTON = ("entrar", "log in")
+
 TEXTBOX = (
     'div[role="textbox"][contenteditable="true"]',
     'div[contenteditable="true"][aria-label]',
     "textarea",
 )
 CODE_FIELD = (
+    'input[name="code"]',
     'input[name="verificationCode"]',
     'input[name="security_code"]',
     'input[autocomplete="one-time-code"]',
@@ -59,6 +67,10 @@ CODE_DETAIL = (
     "O Instagram enviou um código de verificação por e-mail ou SMS para a conta "
     "remetente. Digite-o abaixo."
 )
+
+# Spacing between automatic login attempts. Repeated logins are what gets an
+# account locked, so even a path nobody foresaw cannot log in more often.
+MIN_LOGIN_INTERVAL_SECONDS = 10 * 60
 
 # nodriver gives Chrome under three seconds to open its debugging port. A cold
 # start on the persisted profile can take longer. Same as the search service.
@@ -148,6 +160,7 @@ class InstagramDM:
         self._awaiting_code = False
         # Why the last login did not work. Set means "wait for the user".
         self._login_failed: str | None = None
+        self._last_login_at = float("-inf")
 
     # ─── Browser ─────────────────────────────────────────────────────────────
 
@@ -199,14 +212,30 @@ class InstagramDM:
     async def _pause(self, low: float, high: float) -> None:
         await asyncio.sleep(random.uniform(low, high))
 
+    async def _eval(self, expression: str):
+        """Run JS on the page and return its value, None for null.
+
+        Not tab.evaluate: it hands back the raw RemoteObject whenever the
+        value is falsy (null, "", 0), and the error details instead of raising.
+        """
+        remote, errors = await self.tab.send(
+            cdp.runtime.evaluate(
+                expression=expression,
+                return_by_value=True,
+                user_gesture=True,
+                allow_unsafe_eval_blocked_by_csp=True,
+            )
+        )
+        if errors:
+            raise TransientError(f"Erro de script na página: {errors.text}")
+        return remote.value if remote else None
+
     async def _visible(self) -> tuple[str, str]:
         """Current URL and visible text of the page."""
         # location.href and not tab.url: inside the app navigation is
         # client side, and the target's URL lags behind it.
-        url = await self.tab.evaluate("location.href", return_by_value=True)
-        text = await self.tab.evaluate(
-            "document.body ? document.body.innerText : ''", return_by_value=True
-        )
+        url = await self._eval("location.href")
+        text = await self._eval("document.body ? document.body.innerText : ''")
         return url or "", text or ""
 
     async def _has_session_cookie(self) -> bool:
@@ -226,8 +255,8 @@ class InstagramDM:
         deadline = time.monotonic() + timeout
         script = _center_of_text_js(texts)
         while True:
-            position = await self.tab.evaluate(script, return_by_value=True)
-            if position:
+            position = await self._eval(script)
+            if isinstance(position, dict):
                 await self._pause(0.4, 1.0)
                 await self.tab.mouse_click(position["x"], position["y"])
                 return True
@@ -287,30 +316,57 @@ class InstagramDM:
     # ─── Session ─────────────────────────────────────────────────────────────
 
     def reset(self) -> None:
-        """The user asked to log in again, after fixing whatever was wrong."""
+        """The user asked to log in again, after fixing whatever was wrong.
+
+        A deliberate request, so it gets one attempt right away. Only
+        automatic attempts are spaced.
+        """
         self._awaiting_code = False
         self._login_failed = None
+        self._last_login_at = float("-inf")
 
     async def session(self) -> SessionState:
         """Whether the account can send, logging in when it is not.
 
         Cheap when logged in: a cookie check, no navigation.
-        """
-        try:
-            if self._awaiting_code:
-                return SessionState(False, CODE_DETAIL, needs_code=True)
-            if self._login_failed:
-                return SessionState(False, self._login_failed)
 
+        A login attempt that fails in any way, foreseen or not, waits for the
+        user. On top of that, automatic attempts are spaced by
+        MIN_LOGIN_INTERVAL_SECONDS, so no path can turn into a login loop.
+        """
+        if self._awaiting_code:
+            return SessionState(False, CODE_DETAIL, needs_code=True)
+        if self._login_failed:
+            return SessionState(False, self._login_failed)
+
+        try:
             await self._ensure_browser()
             if await self._has_session_cookie():
                 return SessionState(True)
-            return await self._login()
         except (TransientError, AccountError):
             raise
         except Exception as error:
             await self.close()
             raise TransientError(f"Falha no navegador: {error}") from error
+
+        wait = self._last_login_at + MIN_LOGIN_INTERVAL_SECONDS - time.monotonic()
+        if wait > 0:
+            return SessionState(
+                False,
+                f"Aguardando {math.ceil(wait / 60)} min para tentar entrar de novo.",
+            )
+        self._last_login_at = time.monotonic()
+
+        try:
+            return await self._login()
+        except Exception as error:
+            logger.exception("Login did not finish")
+            await self.close()
+            self._login_failed = (
+                f"O login não terminou ({error}). Clique em Entrar novamente "
+                "para tentar outra vez."
+            )
+            return SessionState(False, self._login_failed)
 
     async def _login(self) -> SessionState:
         if not self.username or not self.password:
@@ -325,8 +381,8 @@ class InstagramDM:
         await self._pause(3, 5)
         await self._click_text(COOKIE_BANNER, timeout=2)
 
-        user_field = await self._first(('input[name="username"]',), timeout=20)
-        password_field = await self._first(('input[name="password"]',), timeout=5)
+        user_field = await self._first(USERNAME_FIELD, timeout=20)
+        password_field = await self._first(PASSWORD_FIELD, timeout=5)
         if user_field is None or password_field is None:
             raise TransientError("A tela de login do Instagram não carregou.")
 
@@ -336,7 +392,9 @@ class InstagramDM:
         await password_field.mouse_click()
         await self._type(password_field, self.password)
         await self._pause(0.6, 1.5)
-        await self._key()
+        # Clicking the button, as a person does. Enter only if it is not found.
+        if not await self._click_text(LOGIN_BUTTON, timeout=3):
+            await self._key()
         await self._pause(8, 11)
 
         return await self._after_login_step()
@@ -401,9 +459,15 @@ class InstagramDM:
                 )
             return state
         except Exception as error:
+            # Same rule as a login: never start over on our own.
+            logger.exception("Code submission did not finish")
             await self.close()
             self._awaiting_code = False
-            raise TransientError(f"Falha no navegador: {error}") from error
+            self._login_failed = (
+                f"O envio do código não terminou ({error}). Clique em Entrar "
+                "novamente para tentar outra vez."
+            )
+            return SessionState(False, self._login_failed)
 
     # ─── Sending ─────────────────────────────────────────────────────────────
 
@@ -475,5 +539,7 @@ class InstagramDM:
         box = await self._first(TEXTBOX, timeout=3)
         if box is not None:
             left = await box.apply("(e) => e.innerText")
-            if (left or "").strip():
+            # apply returns the error details, not a string, if the box went
+            # stale; only real leftover text means the message did not go.
+            if isinstance(left, str) and left.strip():
                 raise TransientError("A mensagem ficou na caixa de texto, não saiu.")
