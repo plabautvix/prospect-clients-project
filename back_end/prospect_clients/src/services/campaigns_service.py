@@ -438,9 +438,6 @@ class CampaignsService:
         elif result.outcome == "failed":
             message.status = "failed"
             message.last_error = result.error
-            # Nothing was delivered, but the platform was still asked about
-            # this recipient. Keep a short gap anyway.
-            state.next_allowed_at = now + timedelta(seconds=pacing.min_gap_seconds)
         elif result.outcome == "retry":
             message.last_error = result.error
             if message.attempts >= MAX_ATTEMPTS:
@@ -455,6 +452,15 @@ class CampaignsService:
             message.status = "pending"
             message.attempts = max(0, message.attempts - 1)
             message.next_attempt_at = None
+
+        if result.outcome in ("failed", "retry"):
+            # Nothing was delivered, but the worker still acted on the
+            # platform: opened a profile, clicked, checked a number. That is
+            # what anti-spam counts, so it is paced like a send. Without this,
+            # a run of failures went out every few seconds.
+            state.next_allowed_at, state.sent_in_chunk = after_send(
+                now, pacing, state.sent_in_chunk
+            )
 
         self.repository.save()
         self.repository.complete_if_done(message.id_campaign)

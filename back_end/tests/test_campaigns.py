@@ -505,3 +505,22 @@ class TestLeadsAndCampaigns:
             [{"nome": "A", "categoria": ""}, {"nome": "B", "categoria": "padaria"}],
         )
         assert client.get("/leads/categories", headers=auth).json() == ["padaria"]
+
+
+def test_failures_are_paced_like_sends(client, db, clock):
+    """A run of failures used to go out every few seconds, one profile after
+    another, which is exactly what anti-spam punishes."""
+    _campaign(client, db, clock, email="pacedfail@test.com")
+
+    first = _claim(client)["message"]
+    _report(client, first["id_message"], "retry", "A conversa não abriu.")
+
+    waiting = _claim(client)
+    assert waiting["message"] is None
+    assert WA.min_gap_seconds <= waiting["retry_after_seconds"] <= WA.max_gap_seconds
+
+    clock.now += timedelta(seconds=WA.max_gap_seconds + 1)
+    second = _claim(client)["message"]
+    _report(client, second["id_message"], "failed", "Numero sem WhatsApp.")
+
+    assert _claim(client)["message"] is None
