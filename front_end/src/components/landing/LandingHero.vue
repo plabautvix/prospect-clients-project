@@ -61,12 +61,6 @@ onBeforeUnmount(clearTimers)
           <span class="text-brand">já está no mapa.</span>
         </h1>
 
-        <p class="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-txt-secondary">
-          Você digita uma busca. O Prospect varre o Google Maps e monta a lista com nome,
-          telefone, categoria, endereço e site de cada negócio, pronta para consultar
-          e ligar.
-        </p>
-
         <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <RouterLink to="/login" class="btn-primary w-full px-7 py-3 text-base sm:w-auto">
             Começar agora
