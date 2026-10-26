@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+from prospect_clients.src.configurations import telemetry
 from prospect_clients.src.configurations.database import engine
 from prospect_clients.src.controllers.automations_controller import router as automations_router
 from prospect_clients.src.controllers.campaigns_controller import router as campaigns_router
@@ -50,3 +51,6 @@ app.include_router(leads_router)
 app.include_router(operations_router)
 app.include_router(campaigns_router)
 app.include_router(outbox_router)
+
+telemetry.setup(app, engine)
+

@@ -16,7 +16,11 @@ RUN pip install --no-cache-dir \
     "lxml>=5.3.0" \
     "paho-mqtt>=2.1.0,<3.0.0" \
     "requests>=2.32.5,<3.0.0" \
-    "python-dotenv>=1.0.0,<2.0.0"
+    "python-dotenv>=1.0.0,<2.0.0" \
+    "opentelemetry-sdk==1.45.1" \
+    "opentelemetry-exporter-otlp-proto-http==1.45.1" \
+    "opentelemetry-instrumentation-requests==0.66b1" \
+    "opentelemetry-instrumentation-logging==0.66b1"
 
 COPY src/ ./src/
 WORKDIR /app/src

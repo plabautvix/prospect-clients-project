@@ -16,7 +16,11 @@ WORKDIR /app
 RUN pip install --no-cache-dir \
     "nodriver==0.50.3" \
     "requests>=2.32.5,<3.0.0" \
-    "python-dotenv>=1.0.0,<2.0.0"
+    "python-dotenv>=1.0.0,<2.0.0" \
+    "opentelemetry-sdk==1.45.1" \
+    "opentelemetry-exporter-otlp-proto-http==1.45.1" \
+    "opentelemetry-instrumentation-requests==0.66b1" \
+    "opentelemetry-instrumentation-logging==0.66b1"
 
 COPY src/ ./src/
 WORKDIR /app/src

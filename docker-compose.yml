@@ -1,3 +1,16 @@
+# Telemetria comum aos serviços da aplicação: traces, métricas e logs vão por
+# OTLP/HTTP para o container lgtm. Sem OTEL_EXPORTER_OTLP_ENDPOINT o código não
+# liga o OpenTelemetry, então basta tirar esta âncora de um serviço para
+# desligá-lo. Ver observability/README.md.
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf|
+  # Nomes estáveis das métricas HTTP (http.server.request.duration, em
+  # segundos), que são os que o dashboard consulta.
+  OTEL_SEMCONV_STABILITY_OPT_IN: http
+  OTEL_METRIC_EXPORT_INTERVAL: "15000"
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=local
+
 services:
 
   # ─── Infrastructure ───────────────────────────────────────────────────────
@@ -49,6 +62,20 @@ services:
     volumes:
       - waha-sessions:/app/.sessions
 
+  # Observabilidade local num container só: OpenTelemetry Collector, Tempo
+  # (traces), Loki (logs), Prometheus (métricas) e Grafana, com o dashboard do
+  # projeto já provisionado. Grafana em http://localhost:3000.
+  lgtm:
+    image: grafana/otel-lgtm:0.37.0
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+      # OTLP para um serviço rodando fora do compose, direto na máquina.
+      - "127.0.0.1:${OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - lgtm-data:/data
+      - ./observability/grafana/dashboards:/otel-lgtm/prospect-dashboards:ro
+      - ./observability/grafana/provisioning/prospect.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/prospect.yaml:ro
+
   # ─── Application services ─────────────────────────────────────────────────
 
   backend:
@@ -57,6 +84,7 @@ services:
       # Host port is configurable to avoid clashing with other local stacks.
       - "${BACKEND_PORT:-8000}:8000"
     environment:
+      <<: *otel-env
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
@@ -74,6 +102,7 @@ services:
   maps-service:
     build: ./serach_services/maps/maps_service
     environment:
+      <<: *otel-env
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
@@ -94,6 +123,7 @@ services:
     # Chrome needs more than the default 64MB of shared memory.
     shm_size: 1gb
     environment:
+      <<: *otel-env
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       MQTT_USERNAME: ${MQTT_USERNAME:-prospect}
@@ -117,6 +147,7 @@ services:
   whatsapp-sender:
     build: ./sender_services/whatsapp_sender
     environment:
+      <<: *otel-env
       WAHA_URL: http://waha:3000
       WAHA_API_KEY: ${WAHA_API_KEY:-dev-waha-key-change-me}
       BACKEND_API_URL: http://backend:8000
@@ -137,6 +168,7 @@ services:
     # SIGTERM termina e reporta a mensagem em mãos em vez de matar no meio.
     stop_grace_period: 2m
     environment:
+      <<: *otel-env
       INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
       INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
       CHROME_PROFILE_DIR: /data/chrome-profile
@@ -156,6 +188,7 @@ services:
       - backend
 
 volumes:
+  lgtm-data:
   instagram-chrome-profile:
   waha-sessions:
   instagram-dm-profile:

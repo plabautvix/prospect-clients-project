@@ -1,10 +1,17 @@
 import logging
 
 import requests
+from opentelemetry import metrics
 
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+leads_found = metrics.get_meter(__name__).create_counter(
+    "prospect.search.leads_found",
+    unit="{lead}",
+    description="Leads found by a search and sent to the backend",
+)
 
 
 class LeadService:
@@ -15,6 +22,7 @@ class LeadService:
     def process_found_leads(self, leads: list[dict]):
         # Only stores them. Messages are sent through campaigns, which the
         # user creates and reviews from the leads screen.
+        leads_found.add(len(leads), {"source": "maps"})
         self._send_leads_to_api(leads)
 
     def _send_leads_to_api(self, leads: list[dict]):

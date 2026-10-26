@@ -1,4 +1,7 @@
+from collections import Counter
 from datetime import timezone
+
+from opentelemetry import metrics
 
 from prospect_clients.src.models.schemas.leads import (
     LeadContact,
@@ -6,6 +9,12 @@ from prospect_clients.src.models.schemas.leads import (
     LeadSchema,
 )
 from prospect_clients.src.repositories.leads_repository import LeadsRepository
+
+leads_registered = metrics.get_meter(__name__).create_counter(
+    "prospect.leads.registered",
+    unit="{lead}",
+    description="Leads received from the search services, by source",
+)
 
 
 class LeadsService:
@@ -88,5 +97,8 @@ class LeadsService:
         ]
 
         self.repository.create_lead_history_entries(user_id, lead_ids, operation_id)
+
+        for origem, count in Counter(lead.origem for lead in leads).items():
+            leads_registered.add(count, {"source": origem})
 
         return persisted_leads

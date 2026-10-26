@@ -1,5 +1,6 @@
 import logging
 
+import telemetry
 from messaging.mqtt_client import run_mqtt
 
 logging.basicConfig(
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    telemetry.setup()
     logger.info("Maps service starting...")
     run_mqtt()
 

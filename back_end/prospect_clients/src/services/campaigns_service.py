@@ -2,6 +2,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
+from opentelemetry import metrics
 
 from prospect_clients.src.configurations.messaging import (
     IDLE_POLL_SECONDS,
@@ -45,6 +46,24 @@ from prospect_clients.src.utils.template import render_message
 
 CHANNEL_LABELS = {WHATSAPP: "WhatsApp", INSTAGRAM: "Instagram"}
 PREVIEW_SAMPLES = 3
+
+_meter = metrics.get_meter(__name__)
+messages_queued = _meter.create_counter(
+    "prospect.campaign.messages_queued",
+    unit="{message}",
+    description="Messages queued by new campaigns",
+)
+# What a worker got when it asked for work: a message, or why it has to wait.
+claims = _meter.create_counter(
+    "prospect.outbox.claims",
+    unit="{claim}",
+    description="Worker requests for the next message, by what they got",
+)
+send_results = _meter.create_counter(
+    "prospect.outbox.results",
+    unit="{message}",
+    description="Send outcomes reported by the workers",
+)
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -195,6 +214,7 @@ class CampaignsService:
             for lead, recipient in eligible
         ]
         campaign = self.repository.create_campaign(campaign, messages)
+        messages_queued.add(len(messages), {"channel": data.channel})
         return CampaignCreated(
             campaign=self._to_response(campaign),
             queued=len(messages),
@@ -382,6 +402,7 @@ class CampaignsService:
         # flight, or that a worker died and its message is not free yet.
         lease = self.repository.live_lease_until(channel, now)
         if lease:
+            claims.add(1, {"channel": channel, "result": "in_flight"})
             return ClaimResponse(retry_after_seconds=_seconds_until(now, lease))
 
         sent_today = self.repository.sent_since(channel, local_day_start(now, pacing))
@@ -389,15 +410,18 @@ class CampaignsService:
             now, pacing, state.next_allowed_at, state.paused_until, sent_today
         )
         if wait:
+            claims.add(1, {"channel": channel, "result": "paced"})
             return ClaimResponse(retry_after_seconds=_seconds_until(now, wait))
 
         lease_until = now + timedelta(seconds=LEASE_SECONDS)
         while True:
             message = self.repository.claim_next(channel, now, lease_until)
             if message is None:
+                claims.add(1, {"channel": channel, "result": "empty"})
                 return ClaimResponse(retry_after_seconds=IDLE_POLL_SECONDS)
 
             if message.attempts <= MAX_ATTEMPTS:
+                claims.add(1, {"channel": channel, "result": "message"})
                 return ClaimResponse(
                     message=ClaimedMessage(
                         id_message=message.id_message,
@@ -423,6 +447,7 @@ class CampaignsService:
             # A repeated or late report. The first one already counted.
             return
 
+        send_results.add(1, {"channel": message.channel, "outcome": result.outcome})
         now = utcnow()
         pacing = PACING[message.channel]
         state = self.repository.get_channel(message.channel)

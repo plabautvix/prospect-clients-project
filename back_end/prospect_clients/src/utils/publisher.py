@@ -6,8 +6,11 @@ from pathlib import Path
 
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
+from opentelemetry import propagate, trace
+from opentelemetry.trace import SpanKind
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 # Load back_end/.env so MQTT credentials work in local dev (no-op under Docker,
 # where env vars come from the orchestrator and take precedence).
@@ -39,7 +42,20 @@ def _connect_with_retry(retries: int = 10, delay: float = 2.0):
 _connect_with_retry()
 
 
-def publish_message(topic: str, message: object) -> None:
-    result = mqtt_client.publish(topic, payload=json.dumps(message))
-    result.wait_for_publish(timeout=5)
-    logger.info("MQTT published to %s: %s", topic, message)
+def publish_message(topic: str, message: dict) -> None:
+    with tracer.start_as_current_span(
+        f"{topic} publish",
+        kind=SpanKind.PRODUCER,
+        attributes={
+            "messaging.system": "mqtt",
+            "messaging.destination.name": topic,
+        },
+    ):
+        # MQTT 3.1.1 has no headers, so the trace context travels in the
+        # payload. The service that consumes it continues this trace.
+        trace_context: dict[str, str] = {}
+        propagate.inject(trace_context)
+        payload = {**message, "trace_context": trace_context}
+        result = mqtt_client.publish(topic, payload=json.dumps(payload))
+        result.wait_for_publish(timeout=5)
+        logger.info("MQTT published to %s: %s", topic, message)

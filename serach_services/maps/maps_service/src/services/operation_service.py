@@ -2,12 +2,14 @@ import logging
 import threading
 
 import requests
+from opentelemetry import context, trace
 
 from config.settings import settings
 from scraper.maps_scraper import scrape_maps
 from services.lead_service import LeadService
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class OperationService:
@@ -27,16 +29,27 @@ class OperationService:
 
         stop_event = threading.Event()
         lead_service = LeadService(user_id=user_id, operation_id=operation_id)
+        # The thread does not inherit the context: the scraping span is handed
+        # the one of the MQTT message that started it.
+        parent = context.get_current()
 
         def _run_and_finalize():
-            scrape_maps(
-                search_text, stop_event, lead_service.process_found_leads,
-                limit=limit,
-            )
-            with self._lock:
-                self._active_operations.pop(operation_id, None)
-            self._update_operation_status_via_api(operation_id, status=0)
-            logger.info("Operation %s finished automatically", operation_id)
+            with tracer.start_as_current_span(
+                "maps scrape",
+                context=parent,
+                attributes={
+                    "prospect.operation.id": operation_id,
+                    "prospect.search.text": search_text,
+                },
+            ):
+                scrape_maps(
+                    search_text, stop_event, lead_service.process_found_leads,
+                    limit=limit,
+                )
+                with self._lock:
+                    self._active_operations.pop(operation_id, None)
+                self._update_operation_status_via_api(operation_id, status=0)
+                logger.info("Operation %s finished automatically", operation_id)
 
         thread = threading.Thread(
             target=_run_and_finalize,

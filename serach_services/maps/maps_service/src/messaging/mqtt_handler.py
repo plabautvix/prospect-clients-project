@@ -1,9 +1,13 @@
 import json
 import logging
 
+from opentelemetry import propagate, trace
+from opentelemetry.trace import SpanKind
+
 from services.operation_service import OperationService
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 _operation_service = OperationService()
 
@@ -26,19 +30,30 @@ def on_message(client, userdata, msg):
         payload = json.loads(msg.payload.decode())
         logger.info("MQTT message received: %s", payload)
 
-        status = payload.get("status")
+        # The backend sends its trace context along, so the scraping lands in
+        # the same trace as the request that started it.
+        with tracer.start_as_current_span(
+            f"{msg.topic} process",
+            context=propagate.extract(payload.get("trace_context", {})),
+            kind=SpanKind.CONSUMER,
+            attributes={
+                "messaging.system": "mqtt",
+                "messaging.destination.name": msg.topic,
+            },
+        ):
+            status = payload.get("status")
 
-        if status == 1:
-            _operation_service.start_operation(
-                search_text=payload.get("search_text"),
-                user_id=payload.get("user_id"),
-                title=payload.get("title"),
-                operation_id=payload.get("id_operation"),
-                limit=payload.get("limit"),
-            )
-        else:
-            _operation_service.stop_operation(
-                operation_id=payload.get("id_operation"),
-            )
+            if status == 1:
+                _operation_service.start_operation(
+                    search_text=payload.get("search_text"),
+                    user_id=payload.get("user_id"),
+                    title=payload.get("title"),
+                    operation_id=payload.get("id_operation"),
+                    limit=payload.get("limit"),
+                )
+            else:
+                _operation_service.stop_operation(
+                    operation_id=payload.get("id_operation"),
+                )
     except Exception:
         logger.exception("Error processing MQTT message")

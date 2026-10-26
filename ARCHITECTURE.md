@@ -24,6 +24,7 @@ gateway de WhatsApp e um broker MQTT, orquestrados por `docker-compose.yml`.
 | `waha` | WAHA Core (WhatsApp Web) | — | Gateway do WhatsApp; só o `whatsapp-sender` fala com ele |
 | `instagram-dm` | Python + nodriver/Chrome | — | Envia as mensagens de Instagram (DM) das campanhas, com um Chrome logado na conta remetente |
 | `mosquitto` | Eclipse Mosquitto (MQTT) | 11883 | Bus de comando backend → serviços de scraping |
+| `lgtm` | Grafana + Tempo + Loki + Prometheus + OTel Collector | 3000, 4318 | Observabilidade: traces, métricas e logs de todos os serviços Python (ver 3.7) |
 
 ## 2. Diagrama de componentes
 
@@ -148,6 +149,18 @@ flowchart LR
   atingi-la.
 - As telas são reconhecidas pelo texto visível (`pages.py`), nunca pelo HTML, que
   traz todos os textos do app dentro dos scripts.
+
+### 3.7 Observabilidade (OpenTelemetry + lgtm)
+- Cada serviço Python tem um `telemetry.py` que liga traces, métricas e logs
+  por OTLP/HTTP, só quando `OTEL_EXPORTER_OTLP_ENDPOINT` está definida (âncora
+  `x-otel-env` do compose). O resto do código usa apenas a API do
+  OpenTelemetry, que não faz nada sem o setup, então os testes não mudam.
+- O trace atravessa os serviços: `traceparent` no HTTP e, no MQTT, na chave
+  `trace_context` do payload. Uma busca ou um envio aparece como um trace só,
+  do backend até o SQL.
+- O `lgtm` (imagem `grafana/otel-lgtm`) recebe tudo e serve o Grafana em
+  http://localhost:3000, com o dashboard `observability/grafana/dashboards/prospect.json`
+  provisionado. Detalhes e métricas em `observability/README.md`.
 
 ## 4. Fluxos principais
 

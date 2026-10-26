@@ -14,8 +14,11 @@ import json
 import logging
 
 import paho.mqtt.client as mqtt
+from opentelemetry import propagate, trace
+from opentelemetry.trace import SpanKind
 
 import config
+import telemetry
 from operations import Operations
 
 logging.basicConfig(
@@ -23,6 +26,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 operations = Operations()
 
@@ -39,16 +43,28 @@ def on_message(client, userdata, message):
     payload = json.loads(message.payload.decode())
     logger.info("received: %s", payload)
 
-    operation_id = payload["id_operation"]
-    if payload["status"] == 1:
-        operations.start(
-            operation_id=operation_id,
-            user_id=payload["user_id"],
-            search_text=payload["search_text"],
-            limit=payload.get("limit"),
-        )
-    else:
-        operations.stop(operation_id)
+    # The backend sends its trace context along, so the search lands in the
+    # same trace as the request that started it.
+    with tracer.start_as_current_span(
+        f"{message.topic} process",
+        context=propagate.extract(payload.get("trace_context", {})),
+        kind=SpanKind.CONSUMER,
+        attributes={
+            "messaging.system": "mqtt",
+            "messaging.destination.name": message.topic,
+            "prospect.operation.id": payload["id_operation"],
+        },
+    ):
+        operation_id = payload["id_operation"]
+        if payload["status"] == 1:
+            operations.start(
+                operation_id=operation_id,
+                user_id=payload["user_id"],
+                search_text=payload["search_text"],
+                limit=payload.get("limit"),
+            )
+        else:
+            operations.stop(operation_id)
 
 
 def build_client() -> mqtt.Client:
@@ -67,6 +83,7 @@ def build_client() -> mqtt.Client:
 
 
 def main():
+    telemetry.setup()
     logger.info("instagram service starting")
     client = build_client()
     client.connect(config.MQTT_HOST, config.MQTT_PORT, 60)

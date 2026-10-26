@@ -14,6 +14,8 @@ import time
 from typing import Callable
 
 import requests
+from opentelemetry import metrics, trace
+from opentelemetry.trace import StatusCode
 
 import config
 from backend import BackendClient, HealthAck, Message
@@ -28,6 +30,13 @@ from instagram import (
 logger = logging.getLogger(__name__)
 
 REPORT_ATTEMPTS = 5
+
+tracer = trace.get_tracer(__name__)
+delivery_duration = metrics.get_meter(__name__).create_histogram(
+    "prospect.sender.delivery.duration",
+    unit="s",
+    description="Time to deliver one campaign message, by outcome",
+)
 
 
 class Worker:
@@ -102,29 +111,47 @@ class Worker:
                 logger.exception("Could not submit the verification code")
 
     def _deliver(self, message: Message) -> None:
-        outcome, error = "sent", None
-        try:
-            self._run(self._gateway.send_text(message.recipient, message.body))
-        except PermanentError as e:
-            outcome, error = "failed", str(e)
-        except TransientError as e:
-            outcome, error = "retry", str(e)
-        except BlockedError as e:
-            # The backend pauses the channel; the message waits untouched.
-            outcome, error = "release", str(e)
-            self._report_health("blocked", str(e))
-        except AccountError as e:
-            outcome, error = "release", str(e)
-            self._report_health("disconnected", str(e))
+        # One trace per message: the send, then the report the backend continues.
+        with tracer.start_as_current_span(
+            f"{config.CHANNEL} deliver",
+            attributes={
+                "prospect.channel": config.CHANNEL,
+                "prospect.message.id": message.id_message,
+                "prospect.message.attempt": message.attempts,
+            },
+        ) as span:
+            started = time.monotonic()
+            outcome, error = "sent", None
+            try:
+                self._run(self._gateway.send_text(message.recipient, message.body))
+            except PermanentError as e:
+                outcome, error = "failed", str(e)
+            except TransientError as e:
+                outcome, error = "retry", str(e)
+            except BlockedError as e:
+                # The backend pauses the channel; the message waits untouched.
+                outcome, error = "release", str(e)
+                self._report_health("blocked", str(e))
+            except AccountError as e:
+                outcome, error = "release", str(e)
+                self._report_health("disconnected", str(e))
 
-        logger.info(
-            "Message %s to @%s: %s%s",
-            message.id_message,
-            message.recipient,
-            outcome,
-            f" ({error})" if error else "",
-        )
-        self._report(message.id_message, outcome, error)
+            delivery_duration.record(
+                time.monotonic() - started,
+                {"channel": config.CHANNEL, "outcome": outcome},
+            )
+            span.set_attribute("prospect.message.outcome", outcome)
+            if error:
+                span.set_status(StatusCode.ERROR, error)
+
+            logger.info(
+                "Message %s to @%s: %s%s",
+                message.id_message,
+                message.recipient,
+                outcome,
+                f" ({error})" if error else "",
+            )
+            self._report(message.id_message, outcome, error)
 
     def _report(self, message_id: int, outcome: str, error: str | None) -> None:
         """Report, insisting: a lost "sent" report means the message goes out twice."""

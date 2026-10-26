@@ -9,6 +9,8 @@ import asyncio
 import logging
 import threading
 
+from opentelemetry import context, metrics, trace
+
 import backend
 from search import GoogleSearch
 
@@ -16,6 +18,13 @@ logger = logging.getLogger(__name__)
 
 # leads.categoria is String(100).
 CATEGORY_LIMIT = 100
+
+tracer = trace.get_tracer(__name__)
+leads_found = metrics.get_meter(__name__).create_counter(
+    "prospect.search.leads_found",
+    unit="{lead}",
+    description="Leads found by a search and sent to the backend",
+)
 
 
 class Operations:
@@ -47,7 +56,12 @@ class Operations:
 
         threading.Thread(
             target=self._run,
-            args=(operation_id, user_id, search_text, stop_event, limit),
+            # The thread does not inherit the context, so the search span is
+            # handed the one of the MQTT message that started it.
+            args=(
+                operation_id, user_id, search_text, stop_event, limit,
+                context.get_current(),
+            ),
             name=f"ig-search-{operation_id}",
             daemon=True,
         ).start()
@@ -68,19 +82,31 @@ class Operations:
         # leave an operation marked active forever.
         self._mark_stopped(operation_id)
 
-    def _run(self, operation_id, user_id, search_text, stop_event, limit) -> None:
-        # nodriver is async, so each operation thread gets its own event loop.
-        try:
-            asyncio.run(
-                self._search(
-                    operation_id, user_id, search_text, stop_event, limit
+    def _run(
+        self, operation_id, user_id, search_text, stop_event, limit, parent=None
+    ) -> None:
+        with tracer.start_as_current_span(
+            "instagram search",
+            context=parent,
+            attributes={
+                "prospect.operation.id": operation_id,
+                "prospect.search.text": search_text,
+            },
+        ):
+            # nodriver is async, so each operation thread gets its own event
+            # loop. asyncio.run copies the current context, so the span
+            # reaches the calls to the backend made inside it.
+            try:
+                asyncio.run(
+                    self._search(
+                        operation_id, user_id, search_text, stop_event, limit
+                    )
                 )
-            )
-        finally:
-            with self._lock:
-                self._running.pop(operation_id, None)
-            self._mark_stopped(operation_id)
-            logger.info("operation %d finished", operation_id)
+            finally:
+                with self._lock:
+                    self._running.pop(operation_id, None)
+                self._mark_stopped(operation_id)
+                logger.info("operation %d finished", operation_id)
 
     async def _search(
         self, operation_id, user_id, search_text, stop_event, limit
@@ -104,6 +130,8 @@ class Operations:
             logger.info("no profiles found for %r", search_text)
             return
 
+        trace.get_current_span().set_attribute("prospect.search.leads", len(profiles))
+        leads_found.add(len(profiles), {"source": "instagram"})
         backend.post_leads(to_leads(profiles, search_text), user_id, operation_id)
 
     def _mark_stopped(self, operation_id: int) -> None:

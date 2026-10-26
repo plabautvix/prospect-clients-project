@@ -18,6 +18,11 @@ sqlalchemy = "^2.0.44"
 alembic = "^1.16.0"
 bcrypt = "^5.0.0"
 paho-mqtt = "^2.1.0"
+opentelemetry-sdk = "1.45.1"
+opentelemetry-exporter-otlp-proto-http = "1.45.1"
+opentelemetry-instrumentation-fastapi = "0.66b1"
+opentelemetry-instrumentation-sqlalchemy = "0.66b1"
+opentelemetry-instrumentation-logging = "0.66b1"
 
 
 [build-system]

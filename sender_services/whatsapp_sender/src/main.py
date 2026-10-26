@@ -2,6 +2,7 @@ import logging
 import signal
 
 import config
+import telemetry
 from backend import BackendClient
 from gateway import WahaGateway
 from worker import Worker
@@ -13,6 +14,8 @@ logging.basicConfig(
 
 
 def main():
+    telemetry.setup()
+
     worker = Worker(
         backend=BackendClient(),
         gateway=WahaGateway(

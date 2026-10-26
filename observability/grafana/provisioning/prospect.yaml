@@ -1,0 +1,13 @@
+# Carrega no Grafana do container lgtm os dashboards de
+# observability/grafana/dashboards, montados em /otel-lgtm/prospect-dashboards.
+# Editar o JSON e recarregar a página basta: o Grafana relê a pasta.
+apiVersion: 1
+
+providers:
+  - name: prospect
+    folder: Prospect Clients
+    type: file
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /otel-lgtm/prospect-dashboards
