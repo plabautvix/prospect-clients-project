@@ -12,11 +12,13 @@ Google). Sobre esses leads o usuário cria **campanhas**: envios em lote por
 WhatsApp (leads com celular) ou Instagram (perfis), entregues aos poucos, em lotes
 e em horário comercial. Cada mensagem é gravada no banco antes de sair, então nada
 se perde se algum serviço cair (ver 4.5). É composta por seis serviços, um
-gateway de WhatsApp e um broker MQTT, orquestrados por `docker-compose.yml`.
+gateway de WhatsApp e um broker MQTT, mais dois serviços de apoio (observabilidade
+e e-mail de desenvolvimento), orquestrados por `docker-compose.yml`. Como subir e
+usar: [`README.md`](README.md).
 
 | Serviço | Stack | Porta (host) | Responsabilidade |
 |---|---|---|---|
-| `frontend` | Vue 3 + Vite + nginx | 80 | UI (login, prospecção, leads) |
+| `frontend` | Vue 3 + Vite + nginx | 80 | UI (landing, cadastro, login, recuperação de senha, prospecção, leads, campanhas) |
 | `backend` | FastAPI (Python 3.12) | 8000 | API REST, autenticação, persistência, orquestra o scraping via MQTT |
 | `maps-service` | Python + Selenium/Firefox | — | Faz o scraping do Google Maps e grava leads na API |
 | `instagram-service` | Python + nodriver/Chrome | — | Busca perfis do Instagram pelo índice do Google e grava leads na API |
@@ -25,6 +27,7 @@ gateway de WhatsApp e um broker MQTT, orquestrados por `docker-compose.yml`.
 | `instagram-dm` | Python + nodriver/Chrome | — | Envia as mensagens de Instagram (DM) das campanhas, com um Chrome logado na conta remetente |
 | `mosquitto` | Eclipse Mosquitto (MQTT) | 11883 | Bus de comando backend → serviços de scraping |
 | `lgtm` | Grafana + Tempo + Loki + Prometheus + OTel Collector | 3000, 4318 | Observabilidade: traces, métricas e logs de todos os serviços Python (ver 3.7) |
+| `mailpit` | Mailpit | 8025 | Servidor SMTP de desenvolvimento: guarda os e-mails do backend numa caixa de entrada local, sem entregar (ver 3.8) |
 
 ## 2. Diagrama de componentes
 
@@ -40,6 +43,8 @@ flowchart LR
     WAHA[waha\nWhatsApp Web]
     DM[instagram-dm\nnodriver/Chrome]
     DB[(SQLite test.db)]
+    MAIL[mailpit\nSMTP :1025]
+    LGTM[lgtm\nGrafana :3000]
 
     User -->|HTTP + JWT| FE
     FE -->|/api/backend/* JWT| BE
@@ -52,6 +57,8 @@ flowchart LR
     WS -->|POST /outbox/whatsapp/claim\nresult, health\nX-Service-Key| BE
     WS -->|REST + X-Api-Key| WAHA
     DM -->|POST /outbox/instagram/claim\nresult, health\nX-Service-Key| BE
+    BE -->|SMTP\nlink de redefinição de senha| MAIL
+    BE & MAPS & IG & WS & DM -.->|OTLP/HTTP :4318| LGTM
 ```
 
 ## 3. Serviços em detalhe
@@ -62,7 +69,8 @@ flowchart LR
 - **Domínios:** `users`, `operations`, `leads`, `automations`, `campaigns`.
 - **Persistência:** SQLite (`configurations/database.py`, `sqlite:///./test.db`).
 - **Endpoints principais:**
-  - `POST /users/`, `POST /users/login`, `GET /users/userme`
+  - `POST /users/` (cadastro), `POST /users/login`, `GET /users/userme`
+  - `POST /users/password/forgot`, `POST /users/password/reset` (recuperação de senha, 4.6)
   - `GET/POST /leads/`, `GET /leads/categories` (paginação + filtros server-side)
   - `GET/POST /operations/`, `PATCH /operations/{id}/status`
   - `POST /automations/operations/maps/activate`, `PUT /automations/operations/maps/deactivate`
@@ -74,6 +82,8 @@ flowchart LR
   - Só serviço (`X-Service-Key`): `POST /outbox/{channel}/claim`,
     `POST /outbox/messages/{id}/result`, `POST /outbox/{channel}/health`
 - **Mensageria de saída:** `utils/publisher.py` publica no MQTT (tópicos `prospect/maps` e `prospect/instagram`).
+- **E-mail de saída:** `utils/mailer.py` envia por SMTP (`configurations/mail.py`,
+  variáveis `SMTP_*`); o texto dos e-mails fica em `utils/emails.py` (ver 3.8).
 - **Migrations:** o schema pertence ao **Alembic** (`back_end/migrations/`). A
   aplicação não cria nem altera tabela: o `alembic upgrade head` roda como passo
   separado antes do uvicorn (ver `back_end/Dockerfile`). `env.py` lê a URL de
@@ -84,6 +94,8 @@ flowchart LR
     e `leads.nao_contatar`.
   - `0006` e `0007` dão a `sender_channels` os pedidos que vêm da tela: novo QR
     code / novo login, e o código de verificação do Instagram.
+  - `0008_add_password_reset_tokens` cria `password_reset_tokens`, com o hash
+    de cada link de redefinição de senha, validade e momento de uso.
 - **`operations.source`** ("maps" ou "instagram") diz ao front qual endpoint de
   deactivate chamar, para que parar uma operação continue funcionando depois de
   um reload.
@@ -115,6 +127,11 @@ flowchart LR
 
 ### 3.4 frontend (Vue)
 - Pinia stores (`auth`, `leads`, `operations`, `campaigns`).
+- Rotas públicas: `/` (landing), `/login`, `/cadastro`, `/esqueci-senha` e
+  `/redefinir-senha`. As quatro telas de conta usam a mesma moldura
+  (`components/auth/`). Quem já está logado é levado ao dashboard ao abrir
+  login, cadastro ou "esqueci a senha"; a redefinição abre sempre, para o link do
+  e-mail funcionar mesmo com uma sessão aberta.
 - Campanhas: criadas na tela de Leads (seleção ou "todos do filtro"), acompanhadas
   em `/campanhas` (status das contas, QR code, progresso, pausar/cancelar).
 - Token JWT guardado em `localStorage`; injetado em toda request via interceptor
@@ -162,11 +179,28 @@ flowchart LR
   http://localhost:3000, com o dashboard `observability/grafana/dashboards/prospect.json`
   provisionado. Detalhes e métricas em `observability/README.md`.
 
+### 3.8 E-mail (SMTP + mailpit)
+- O backend envia e-mail por qualquer servidor SMTP configurado em `SMTP_HOST`,
+  `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_STARTTLS` e `SMTP_FROM`.
+  Sem `SMTP_HOST`, nada é enviado e um aviso vai para o log.
+- No compose, o padrão é o `mailpit`: aceita todo e-mail e não entrega a ninguém.
+  A caixa de entrada fica em http://localhost:8025. Em produção, basta apontar as
+  variáveis `SMTP_*` para um servidor real e `APP_URL` para o endereço público do
+  frontend, que é a base dos links enviados.
+- O envio roda depois da resposta HTTP (`BackgroundTasks`) e nunca lança erro:
+  uma falha é só logada, para não revelar se o e-mail tem conta (ver S11).
+
 ## 4. Fluxos principais
 
-### 4.1 Login
-1. `POST /users/login` valida senha (bcrypt) e emite JWT.
-2. Front guarda o token e o envia como `Authorization: Bearer` nas próximas chamadas.
+### 4.1 Cadastro e login
+1. `POST /users/` valida o e-mail e uma senha de 8 a 72 bytes (o bcrypt não lê
+   além disso), grava o e-mail em minúsculas e responde 409 se ele já tiver
+   conta, sem diferenciar maiúsculas. A resposta traz só o e-mail.
+2. A tela de cadastro já faz o login em seguida.
+3. `POST /users/login` valida a senha (bcrypt) e emite o JWT. E-mail inexistente e
+   senha errada recebem a mesma resposta, no mesmo tempo: sem conta, a senha é
+   comparada contra um hash fictício.
+4. Front guarda o token e o envia como `Authorization: Bearer` nas próximas chamadas.
 
 ### 4.2 Iniciar operação de scraping
 1. `POST /automations/operations/maps/activate` cria a operação (status=1) e
@@ -215,13 +249,39 @@ O worker insiste no report e trata SIGTERM terminando a mensagem em mãos.
 telefone ou perfil, de toda campanha futura. Ninguém é contatado duas vezes pelo
 mesmo canal pelo mesmo usuário.
 
+### 4.6 Recuperação de senha
+```mermaid
+sequenceDiagram
+    participant U as Usuário
+    participant FE as frontend
+    participant BE as backend
+    participant M as SMTP (mailpit)
+    U->>FE: /esqueci-senha (e-mail)
+    FE->>BE: POST /users/password/forgot
+    BE-->>FE: 202, mesma mensagem exista a conta ou não
+    BE->>M: e-mail com /redefinir-senha?token=... (só se houver conta)
+    U->>FE: abre o link
+    FE->>BE: POST /users/password/reset {token, nova senha}
+    BE-->>FE: 200, ou 400 se o link for inválido, usado ou vencido
+    FE->>U: /login com aviso "Senha redefinida"
+```
+1. O backend gera um token aleatório (`secrets.token_urlsafe(32)`) e grava só o
+   SHA-256 dele em `password_reset_tokens`, com validade de
+   `PASSWORD_RESET_EXPIRATION_MINUTES` (30). Quem ler o banco não consegue usar
+   um link pendente.
+2. Pedir de novo invalida os links anteriores: só o mais recente funciona.
+3. Na redefinição, o link e qualquer outro pendente daquele usuário são marcados
+   como usados. Cada link funciona uma vez.
+4. A tela de redefinição tira o token da barra de endereço assim que abre, para
+   ele não ficar no histórico do navegador, e encerra a sessão local ao terminar.
+
 ## 5. Mensageria
 
 | Bus | Quem publica | Quem consome | Tópico/Exchange | Conteúdo |
 |---|---|---|---|---|
 | MQTT (mosquitto) | backend | maps-service | tópico `prospect/maps` | comando ativar/desativar (sem token; só `user_id`) |
 | MQTT (mosquitto) | backend | instagram-service | tópico `prospect/instagram` | comando ativar/desativar (sem token; só `user_id`) |
-| HTTP pull (outbox) | backend | whatsapp-sender | `POST /outbox/{channel}/claim` | uma mensagem por vez, ou `retry_after_seconds` |
+| HTTP pull (outbox) | backend | whatsapp-sender, instagram-dm | `POST /outbox/{channel}/claim` | uma mensagem por vez, ou `retry_after_seconds` |
 
 O RabbitMQ foi removido: a fila precisava de atraso por horas, pausa, cancelamento
 e status por mensagem, e tudo isso exigia o banco de qualquer jeito. Com os dois
@@ -262,6 +322,11 @@ forma independente.
 | S7 | 🔵 Adiado por decisão | TLS entre serviços foi **removido**. Todos os containers compartilham a rede privada do compose num único host, e nada de fora alcança os brokers: o hop que o TLS protegia já é privado, e quem estivesse dentro da rede para farejá-lo leria as senhas nas variáveis de ambiente do mesmo jeito. Custava 12 arquivos e uma CA self-signed. **Reabrir quando** os serviços deixarem de compartilhar uma rede confiável: múltiplos hosts, Kubernetes entre nós, ou broker gerenciado. Nesses casos a resposta natural é o TLS do broker gerenciado, não uma CA própria | `docker-compose.yml` |
 | S8 | ✅ Resolvida | ~~`get_current_user` lançava `Exception` genérica + `print`~~ → agora `HTTPException(401)` com `WWW-Authenticate` | `utils/security.py` |
 | S9 | 🟡 Média | Token em `localStorage` (exposto a XSS) | `front_end/services/backend.js` |
+| S10 | ✅ Resolvida | ~~Cadastro devolvia a senha em texto puro na resposta, aceitava qualquer senha e respondia 500 para e-mail repetido~~ → responde só o e-mail, exige de 8 a 72 bytes e responde 409 | `user_controller.py`, `user_service.py`, `schemas/user.py` |
+| S11 | ✅ Resolvida | ~~Enumeração de contas: o login dizia "usuário não encontrado" ou "senha incorreta"~~ → mesma mensagem e mesmo tempo nos dois casos. A recuperação de senha também responde igual e envia o e-mail depois da resposta | `user_service.py`, `user_controller.py` |
+| S12 | 🟡 Média | Sem limite de tentativas em login, cadastro e "esqueci a senha": permite força bruta e disparar muitos e-mails para um endereço | `user_controller.py` |
+| S13 | 🟡 Média | Redefinir a senha não revoga JWTs já emitidos: uma sessão em outro aparelho continua válida até expirar (até `JWT_EXPIRATION_MINUTES`, 12 h). Resolver exige gravar a data da troca e conferir no `get_current_user` | `user_service.py`, `utils/security.py` |
+| S14 | 🔵 Baixa | Cadastro aberto e sem confirmação de e-mail: qualquer pessoa que alcance a aplicação cria conta, com qualquer endereço | `user_controller.py` |
 
 ## 8. A falha central e os caminhos de solução
 
@@ -306,4 +371,9 @@ sem escopo nem revogação independente.
 4. ✅ **Proteger whatsapp** (S4): resolvido. O envio novo usa outbox no banco,
    sem RabbitMQ, e nenhuma peça dele é alcançável de fora. Pendência: uma
    `SERVICE_API_KEY` por serviço, para o worker de envio não poder gravar leads.
-5. **Evolução:** OAuth2 client-credentials/mTLS; migrar SQLite → Postgres para produção.
+5. **Contas de usuário:** cadastro e recuperação de senha prontos, sem senha na
+   resposta e sem enumeração de contas (S10, S11). Pendências, em ordem: limite
+   de tentativas em login e recuperação (S12), revogar sessões ao trocar a senha
+   (S13), e decidir se o cadastro fica aberto ou passa a exigir convite ou
+   confirmação de e-mail (S14).
+6. **Evolução:** OAuth2 client-credentials/mTLS; migrar SQLite → Postgres para produção.
