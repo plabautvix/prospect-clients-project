@@ -70,9 +70,9 @@ class TestOperationsService:
 
 class TestOperationsEndpoints:
     def _get_token(self, client):
-        client.post("/users/", json={"email": "ops@test.com", "password": "pass"})
+        client.post("/users/", json={"email": "ops@test.com", "password": "pass1234"})
         login = client.post(
-            "/users/login", data={"username": "ops@test.com", "password": "pass"}
+            "/users/login", data={"username": "ops@test.com", "password": "pass1234"}
         )
         return login.json()["access_token"]
 

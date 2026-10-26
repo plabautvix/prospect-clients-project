@@ -25,6 +25,22 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('userEmail', me.data.email)
   }
 
+  // Cria a conta e já entra nela.
+  async function register(email, password) {
+    await api.post('/users/', { email, password })
+    await login(email, password)
+  }
+
+  // A resposta é sempre a mesma, exista a conta ou não.
+  async function forgotPassword(email) {
+    const { data } = await api.post('/users/password/forgot', { email })
+    return data.message
+  }
+
+  async function resetPassword(resetToken, password) {
+    await api.post('/users/password/reset', { token: resetToken, password })
+  }
+
   function logout() {
     token.value = null
     userEmail.value = null
@@ -32,5 +48,14 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('userEmail')
   }
 
-  return { token, userEmail, isAuthenticated, login, logout }
+  return {
+    token,
+    userEmail,
+    isAuthenticated,
+    login,
+    register,
+    forgotPassword,
+    resetPassword,
+    logout,
+  }
 })

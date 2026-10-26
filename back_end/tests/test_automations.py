@@ -91,8 +91,8 @@ class TestAutomationsEndpoints:
     def test_activate_endpoint_creates_operation(self, mock_service_cls, client):
         mock_service_cls.return_value.activate_maps_scraping.return_value = {"message": "ok"}
 
-        client.post("/users/", json={"email": "auto@test.com", "password": "pass"})
-        login = client.post("/users/login", data={"username": "auto@test.com", "password": "pass"})
+        client.post("/users/", json={"email": "auto@test.com", "password": "pass1234"})
+        login = client.post("/users/login", data={"username": "auto@test.com", "password": "pass1234"})
         token = login.json()["access_token"]
 
         response = client.post(
@@ -116,8 +116,8 @@ class TestAutomationsEndpoints:
     def test_deactivate_endpoint(self, mock_service_cls, client):
         mock_service_cls.return_value.deactivate_maps_scraping.return_value = {"message": "ok"}
 
-        client.post("/users/", json={"email": "deact@test.com", "password": "pass"})
-        login = client.post("/users/login", data={"username": "deact@test.com", "password": "pass"})
+        client.post("/users/", json={"email": "deact@test.com", "password": "pass1234"})
+        login = client.post("/users/login", data={"username": "deact@test.com", "password": "pass1234"})
         token = login.json()["access_token"]
 
         response = client.put(
@@ -182,8 +182,8 @@ class TestAutomationsEndpoints:
 
     @staticmethod
     def _login(client, email: str) -> str:
-        client.post("/users/", json={"email": email, "password": "pass"})
+        client.post("/users/", json={"email": email, "password": "pass1234"})
         login = client.post(
-            "/users/login", data={"username": email, "password": "pass"}
+            "/users/login", data={"username": email, "password": "pass1234"}
         )
         return login.json()["access_token"]

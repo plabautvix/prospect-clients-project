@@ -76,6 +76,14 @@ services:
       - ./observability/grafana/dashboards:/otel-lgtm/prospect-dashboards:ro
       - ./observability/grafana/provisioning/prospect.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/prospect.yaml:ro
 
+  # Servidor de e-mail de desenvolvimento: aceita tudo que o backend envia
+  # (recuperação de senha) e não entrega a ninguém. A caixa de entrada fica em
+  # http://localhost:8025. Em produção, aponte SMTP_* para um servidor real.
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+
   # ─── Application services ─────────────────────────────────────────────────
 
   backend:
@@ -94,6 +102,15 @@ services:
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-720}
       # Shared service credential validated by the backend (X-Service-Key).
       SERVICE_API_KEY: ${SERVICE_API_KEY:-dev-service-key-change-me}
+      # Links enviados por e-mail apontam para cá.
+      APP_URL: ${APP_URL:-http://localhost}
+      # Sem nada no .env, os e-mails vão para o Mailpit.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_FROM: ${SMTP_FROM:-Prospect <nao-responda@prospect.app>}
     volumes:
       - ./back_end:/app
     depends_on:

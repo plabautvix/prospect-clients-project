@@ -12,6 +12,25 @@ const routes = [
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),
+    meta: { public: true, guestOnly: true },
+  },
+  {
+    path: '/cadastro',
+    name: 'cadastro',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { public: true, guestOnly: true },
+  },
+  {
+    path: '/esqueci-senha',
+    name: 'esqueci-senha',
+    component: () => import('@/views/ForgotPasswordView.vue'),
+    meta: { public: true, guestOnly: true },
+  },
+  {
+    // Aberta mesmo com sessão: o link do e-mail tem que funcionar sempre.
+    path: '/redefinir-senha',
+    name: 'redefinir-senha',
+    component: () => import('@/views/ResetPasswordView.vue'),
     meta: { public: true },
   },
   {
@@ -41,7 +60,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.requiresAuth && !auth.isAuthenticated) return '/login'
-  if (to.path === '/login' && auth.isAuthenticated) return '/dashboard'
+  if (to.meta.guestOnly && auth.isAuthenticated) return '/dashboard'
 })
 
 export default router

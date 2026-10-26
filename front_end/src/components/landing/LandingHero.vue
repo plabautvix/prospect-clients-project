@@ -62,7 +62,7 @@ onBeforeUnmount(clearTimers)
         </h1>
 
         <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <RouterLink to="/login" class="btn-primary w-full px-7 py-3 text-base sm:w-auto">
+          <RouterLink to="/cadastro" class="btn-primary w-full px-7 py-3 text-base sm:w-auto">
             Começar agora
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5-5 5M6 12h12" />

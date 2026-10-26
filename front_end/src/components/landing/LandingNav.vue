@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
             to="/login"
             class="hidden rounded-pill px-3 py-2 text-sm text-txt-secondary transition-colors hover:bg-surface-hover hover:text-txt-primary sm:block"
           >Entrar</RouterLink>
-          <RouterLink to="/login" class="btn-primary text-sm">Começar agora</RouterLink>
+          <RouterLink to="/cadastro" class="btn-primary text-sm">Começar agora</RouterLink>
         </template>
 
         <button

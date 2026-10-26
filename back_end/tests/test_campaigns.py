@@ -104,9 +104,9 @@ def clock(monkeypatch):
 
 
 def _seed(client, db, email, leads):
-    client.post("/users/", json={"email": email, "password": "pass"})
+    client.post("/users/", json={"email": email, "password": "pass1234"})
     token = client.post(
-        "/users/login", data={"username": email, "password": "pass"}
+        "/users/login", data={"username": email, "password": "pass1234"}
     ).json()["access_token"]
     user = UserRepository(db).get_by_email(email)
     if leads:

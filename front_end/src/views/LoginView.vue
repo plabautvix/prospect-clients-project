@@ -1,15 +1,22 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import AuthShell from '@/components/auth/AuthShell.vue'
+import FormAlert from '@/components/auth/FormAlert.vue'
+import SubmitButton from '@/components/auth/SubmitButton.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
-const email = ref('')
+const email = ref(route.query.email || '')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+
+// Vindo da redefinição de senha.
+const notice = route.query.redefinida ? 'Senha redefinida. Entre com a nova senha.' : ''
 
 async function submit() {
   if (!email.value || !password.value) return
@@ -19,7 +26,9 @@ async function submit() {
     await auth.login(email.value, password.value)
     router.push('/dashboard')
   } catch (e) {
-    error.value = e.response?.data?.detail || 'Credenciais inválidas.'
+    error.value = e.response?.status === 400
+      ? 'E-mail ou senha incorretos.'
+      : 'Não foi possível entrar agora. Tente novamente.'
   } finally {
     loading.value = false
   }
@@ -27,50 +36,49 @@ async function submit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-dark-base px-4">
-    <div class="w-full max-w-sm">
-      <!-- Logo -->
-      <div class="mb-10 flex flex-col items-center gap-3">
-        <h1 class="text-4xl font-extrabold tracking-tight">
-          <span class="text-brand">Pr</span><span class="text-txt-primary">ospect</span>
-        </h1>
-        <p class="text-sm text-txt-secondary">Entre na sua conta para continuar</p>
+  <AuthShell subtitle="Entre na sua conta para continuar">
+    <form @submit.prevent="submit" class="card space-y-5">
+      <FormAlert v-if="notice && !error" kind="success">{{ notice }}</FormAlert>
+
+      <div>
+        <label class="label" for="email">E-mail</label>
+        <input
+          id="email"
+          v-model="email"
+          type="email"
+          autocomplete="email"
+          placeholder="voce@exemplo.com"
+          required
+          class="input"
+        />
+      </div>
+      <div>
+        <div class="mb-1.5 flex items-baseline justify-between">
+          <label class="label !mb-0" for="password">Senha</label>
+          <RouterLink
+            :to="{ path: '/esqueci-senha', query: email ? { email } : {} }"
+            class="text-xs text-txt-secondary transition-colors hover:text-brand"
+          >Esqueci minha senha</RouterLink>
+        </div>
+        <input
+          id="password"
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          required
+          class="input"
+        />
       </div>
 
-      <form @submit.prevent="submit" class="card space-y-5">
-        <div>
-          <label class="label">E-mail</label>
-          <input
-            v-model="email"
-            type="email"
-            placeholder="voce@exemplo.com"
-            required
-            class="input"
-          />
-        </div>
-        <div>
-          <label class="label">Senha</label>
-          <input
-            v-model="password"
-            type="password"
-            placeholder="••••••••"
-            required
-            class="input"
-          />
-        </div>
+      <FormAlert v-if="error">{{ error }}</FormAlert>
 
-        <div v-if="error" class="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400">
-          {{ error }}
-        </div>
+      <SubmitButton :loading="loading" label="Entrar" loading-label="Entrando…" />
+    </form>
 
-        <button type="submit" :disabled="loading" class="btn-primary w-full">
-          <svg v-if="loading" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-          </svg>
-          {{ loading ? 'Entrando…' : 'Entrar' }}
-        </button>
-      </form>
-    </div>
-  </div>
+    <template #footer>
+      Ainda não tem conta?
+      <RouterLink to="/cadastro" class="font-medium text-brand hover:text-brand-hover">Criar conta</RouterLink>
+    </template>
+  </AuthShell>
 </template>

@@ -113,9 +113,9 @@ class TestLeadsEndpoints:
         from prospect_clients.src.configurations.auth import SERVICE_API_KEY
         from prospect_clients.src.repositories.user_repository import UserRepository
 
-        client.post("/users/", json={"email": email, "password": "pass"})
+        client.post("/users/", json={"email": email, "password": "pass1234"})
         token = client.post(
-            "/users/login", data={"username": email, "password": "pass"}
+            "/users/login", data={"username": email, "password": "pass1234"}
         ).json()["access_token"]
         user = UserRepository(db).get_by_email(email)
         if leads:
@@ -212,9 +212,9 @@ class TestOperationLeads:
     """GET /operations/{id}/leads: what a given run collected."""
 
     def _login(self, client, email):
-        client.post("/users/", json={"email": email, "password": "pass"})
+        client.post("/users/", json={"email": email, "password": "pass1234"})
         return client.post(
-            "/users/login", data={"username": email, "password": "pass"}
+            "/users/login", data={"username": email, "password": "pass1234"}
         ).json()["access_token"]
 
     def _user_id(self, db, email):
@@ -297,9 +297,9 @@ class TestLeadStats:
     def _seed(self, client, db, email, leads):
         from prospect_clients.src.configurations.auth import SERVICE_API_KEY
 
-        client.post("/users/", json={"email": email, "password": "pass"})
+        client.post("/users/", json={"email": email, "password": "pass1234"})
         token = client.post(
-            "/users/login", data={"username": email, "password": "pass"}
+            "/users/login", data={"username": email, "password": "pass1234"}
         ).json()["access_token"]
         user = UserRepository(db).get_by_email(email)
         client.post(

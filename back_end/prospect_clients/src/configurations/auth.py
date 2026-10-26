@@ -23,3 +23,12 @@ JWT_EXPIRATION_MINUTES: int = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))
 # kept separate from user JWTs so services have their own identity and can be
 # rotated/revoked independently. MUST be set via environment in real deployments.
 SERVICE_API_KEY: str = os.getenv("SERVICE_API_KEY", "dev-service-key-change-me")
+
+# How long a password reset link works. Short, since it grants the account to
+# whoever holds the e-mail.
+PASSWORD_RESET_EXPIRATION_MINUTES: int = int(
+    os.getenv("PASSWORD_RESET_EXPIRATION_MINUTES", "30")
+)
+
+# Where the frontend lives, to build the links sent by e-mail.
+APP_URL: str = os.getenv("APP_URL", "http://localhost").rstrip("/")
